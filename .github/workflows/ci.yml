@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  agent-typecheck:
+    name: Agent typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: agent/package-lock.json
+      - name: Install deps
+        working-directory: agent
+        run: npm ci
+      - name: Typecheck
+        working-directory: agent
+        run: npm run typecheck
+      - name: Test
+        working-directory: agent
+        env:
+          CSPR_CLOUD_API_KEY: ci-dummy-key
+        run: npm test -- --ci
+      - name: Verify setup
+        working-directory: agent
+        env:
+          CSPR_CLOUD_API_KEY: ci-dummy-key
+        run: npm run verify || true   # don't fail CI on env-only issues
+
+  contracts-build:
+    name: Odra contracts build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2025-01-15
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            contracts/odra/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/odra/Cargo.lock') }}
+      - name: Install wasm-opt + wabt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wabt
+          # binaryen (wasm-opt) is in apt as binaryen
+          sudo apt-get install -y binaryen || true
+      - name: Verify wasm artifacts (built locally, see SETUP_WINDOWS.md)
+        run: |
+          test -f contracts/odra/wasm/RevenueEmitter.wasm || {
+            echo "::warning::wasm/RevenueEmitter.wasm not present in repo (must be built locally — see SETUP_WINDOWS.md)"
+            exit 0
+          }
+          test -f contracts/odra/wasm/AgentVault.wasm || {
+            echo "::warning::wasm/AgentVault.wasm not present in repo (must be built locally)"
+            exit 0
+          }
+      - name: Type-check contracts (no_std / casper target)
+        working-directory: contracts/odra
+        run: |
+          cargo +nightly-2025-01-15 check --target wasm32-unknown-unknown --lib \
+            --package revenue_emitter \
+            --package agent_vault

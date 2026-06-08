@@ -1,0 +1,589 @@
+# ParkFlow Agent — Casper Agentic Buildathon 2026
+
+> **Autonomous multi-agent system that picks up on-chain RWA revenue
+> events, pays for a premium off-chain signal via the [x402][x402]
+> micropayment protocol, routes the proceeds through the CSPR.trade
+> DEX (via MCP), and logs every decision to an on-chain **AgentVault**
+> for verifiable reputation.**
+
+[![Caspar 2.0 testnet](https://img.shields.io/badge/Caspar_2.0-testnet-FF6B6B?logo=casper&logoColor=white)](https://testnet.cspr.live)
+[![Odra 2.7](https://img.shields.io/badge/Odra-2.7-5B21B6?logo=rust&logoColor=white)](https://odra.dev)
+[![x402](https://img.shields.io/badge/x402-micropayments-22C55E)](https://github.com/make-software/casper-x402)
+[![CSPR.cloud MCP](https://img.shields.io/badge/CSPR.cloud-MCP-0EA5E9)](https://docs.cspr.cloud)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](LICENSE)
+
+---
+
+## Table of contents
+
+1. [What it does](#-what-it-does)
+2. [Demo flow](#-demo-flow)
+3. [Architecture](#-architecture)
+4. [Repository layout](#-repository-layout)
+5. [Quick start](#-quick-start)
+6. [Live deploy hashes](#-live-deploy-hashes)
+7. [How the agent decides](#-how-the-agent-decides)
+8. [The x402 handshake](#-the-x402-handshake)
+9. [Gas budget & economics](#-gas-budget--economics)
+10. [Configuration](#-configuration)
+11. [Testing](#-testing)
+12. [Operational scripts](#-operational-scripts)
+13. [User actions required](#-user-actions-required)
+14. [Resources](#-resources)
+
+---
+
+## 💡 What it does
+
+Every time a real-world revenue tick fires for an RWA (e.g. a parking lot,
+a rental property, a royalty stream), the **RevenueEmitter** contract
+pushes a `RevenueEmitted` event on-chain. The ParkFlow agent swarm
+picks it up and runs a fully-autonomous decision loop:
+
+1. **Analyst** reads the on-chain event, fetches the agent's live
+   portfolio via the **CSPR.cloud MCP**, and quotes a route via the
+   **CSPR.trade MCP**.
+2. It then **pays a micropayment** for a premium off-chain *utilization
+   signal* using the **x402** protocol (Casper's EIP-712-signed
+   `TransferAuthorization`). The signal server returns a 402 challenge,
+   the agent signs it with its local private key, replays the request,
+   and gets the forecast.
+3. The **LLM** (or a deterministic heuristic fallback) decides
+   *add-liquidity* vs *swap-to-sCSPR*, with confidence.
+4. The **Executor** builds the trade deploy via MCP, signs locally,
+   submits to testnet, and then **calls `execute_strategy` on
+   AgentVault** to write the decision on-chain for reputation.
+5. The frontend watches the live SSE feed and shows the entire pipeline.
+
+---
+
+## 🎬 Demo flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Demo Operator
+    participant FE as Frontend<br/>(CSPR.click)
+    participant API as ParkFlow Backend<br/>(:4000)
+    participant Agent as ParkFlow Agent<br/>(Node)
+    participant Chain as Casper Testnet
+    participant Signal as x402 Signal<br/>(:4001)
+    participant MCP as CSPR.cloud<br/>+ CSPR.trade MCP
+
+    Operator->>FE: Connect CSPR.click
+    FE->>API: GET /api/cycle
+    API->>Agent: runCycle(revenueEvent)
+
+    rect rgb(40, 50, 80)
+    Note over Agent,MCP: ANALYST
+    Agent->>MCP: getAccountInfo(agentPubkey)
+    Agent->>Chain: getVaultOverview() via CSPR.cloud
+    Agent->>MCP: getQuote(CSPR→sCSPR, amount)
+    Agent->>MCP: getPortfolioValue(owner)
+    Agent->>Signal: GET /signal (x402)
+    Signal-->>Agent: 402 + payment requirements
+    Agent->>Chain: build EIP-712 sign via casper-eip-712
+    Agent->>Agent: sign with local PEM
+    Agent->>Signal: GET /signal + X-Payment (signed)
+    Signal-->>Agent: 200 + utilization signal
+    end
+
+    Note over Agent: LLM or heuristic<br/>decides strategy
+
+    rect rgb(40, 80, 60)
+    Note over Agent,Chain: EXECUTOR
+    Agent->>MCP: buildUnsignedDeploy(action, pair, amount)
+    Agent->>Agent: sign deploy with local PEM
+    Agent->>Chain: putDeploy(swap/lp)
+    Chain-->>Agent: deployHash
+    Agent->>Chain: call execute_strategy on AgentVault
+    Chain-->>Agent: vaultLogTxHash
+    end
+
+    Agent-->>API: { proposal, execution }
+    API-->>FE: cycle result
+    FE->>Operator: live animation
+```
+
+---
+
+## 🏛 Architecture
+
+### Logical layers
+
+```mermaid
+flowchart TB
+    subgraph "On-Chain (Casper 2.0 Testnet)"
+        RE[RevenueEmitter<br/>wasm 214 KB]
+        AV[AgentVault<br/>wasm 232 KB]
+    end
+
+    subgraph "Agent (Node 20 + TypeScript)"
+        IDX[runCycle]
+        ANA[Analyst]
+        EXE[Executor]
+        LLM[decideStrategyWithLLM<br/>or heuristic]
+        MCP[mcp/casperMcp<br/>mcp/csprTradeMcp]
+        X402[x402/client<br/>EIP-712 sign]
+        SGN[casper/signer<br/>casper-js-sdk v5]
+        VLT[casper/vaultClient]
+    end
+
+    subgraph "Off-Chain Services"
+        CCD[CSPR.cloud<br/>REST + Streaming + MCP]
+        CTR[CSPR.trade<br/>MCP]
+        SIG[x402 Signal Server<br/>:4001]
+    end
+
+    subgraph "Frontend"
+        FE2[static index.html<br/>CSPR.click + SSE]
+    end
+
+    RE -- "RevenueEmitted events" --> CCD
+    CCD --> ANA
+    ANA --> MCP
+    MCP --> CCD
+    MCP --> CTR
+    ANA --> X402
+    X402 --> SIG
+    SIG -- "402 + signal" --> X402
+    ANA --> LLM
+    LLM --> EXE
+    EXE --> MCP
+    EXE --> SGN
+    SGN --> Chain
+    EXE --> VLT
+    VLT --> Chain
+    CCD -- "SSE events" --> FE2
+    API[server.ts :4000] --> FE2
+    IDX --> ANA
+    IDX --> EXE
+    FE2 --> API
+```
+
+### Component map
+
+```mermaid
+graph LR
+    subgraph "contracts/odra/"
+        Rust1[revenue_emitter.rs<br/>init+emit+views]
+        Rust2[agent_vault.rs<br/>init+execute_strategy+views]
+    end
+    subgraph "agent/src/"
+        TS1[index.ts<br/>runCycle]
+        TS2[analyst.ts<br/>runAnalyst]
+        TS3[executor.ts<br/>runExecutor]
+        TS4[server.ts<br/>Express + SSE]
+        TS5[config.ts<br/>zod env]
+        TS6[types.ts]
+    end
+    subgraph "agent/src/casper/"
+        TS7[signer.ts<br/>casper-js-sdk v5]
+        TS8[vaultClient.ts<br/>logStrategyToVault]
+    end
+    subgraph "agent/src/csprCloud/"
+        TS9[rest.ts<br/>x402-facilitator raw auth]
+        TS10[streaming.ts<br/>SSE events]
+        TS11[cesEvents.ts]
+        TS12[x402Facilitator.ts]
+    end
+    subgraph "agent/src/mcp/"
+        TS13[casperMcp.ts]
+        TS14[csprTradeMcp.ts]
+    end
+    subgraph "agent/src/x402/"
+        TS15[client.ts<br/>payAndFetchViaX402]
+        TS16[header.ts<br/>envelope helpers]
+    end
+    subgraph "agent/src/agent/"
+        TS17[llmStrategy.ts]
+        TS18[slippage.ts]
+    end
+    subgraph "scripts/"
+        SC1[deploy.ts]
+        SC2[x402Server.ts]
+        SC3[verify-setup.ts]
+        SC4[quickstart.ts]
+    end
+    TS1 --> TS2
+    TS1 --> TS3
+    TS2 --> TS7
+    TS2 --> TS9
+    TS2 --> TS10
+    TS2 --> TS11
+    TS2 --> TS13
+    TS2 --> TS14
+    TS2 --> TS15
+    TS2 --> TS17
+    TS2 --> TS18
+    TS3 --> TS7
+    TS3 --> TS14
+    TS3 --> TS8
+    TS4 --> TS1
+    TS8 --> TS7
+    TS15 --> TS16
+    TS15 --> TS17
+    Rust1 --> TS7
+    Rust2 --> TS7
+    Rust2 --> TS8
+```
+
+---
+
+## 📁 Repository layout
+
+```
+parkflow-agent/
+├── contracts/odra/             Odra 2.7 smart contracts (Rust → Wasm)
+│   ├── Odra.toml               workspace + per-network config
+│   ├── Cargo.toml              workspace
+│   ├── rust-toolchain          pinned to nightly-2025-01-15
+│   ├── revenue_emitter/        RWA revenue event emitter
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   └── revenue_emitter.rs
+│   │   └── bin/build_contract.rs
+│   └── agent_vault/            agent-controlled DeFi vault
+│       └── (same layout)
+├── agent/                      Node 20 + TypeScript agents
+│   ├── src/
+│   │   ├── index.ts            main orchestration (runCycle)
+│   │   ├── analyst.ts          Analyst: read state → decide
+│   │   ├── executor.ts         Executor: build → sign → submit
+│   │   ├── server.ts           Express backend (SSE bridge)
+│   │   ├── config.ts           zod-validated env
+│   │   ├── types.ts            shared types
+│   │   ├── mcp/
+│   │   │   ├── casperMcp.ts    CSPR.cloud MCP (read deploys, accounts)
+│   │   │   └── csprTradeMcp.ts  CSPR.trade MCP (quotes, portfolio)
+│   │   ├── x402/
+│   │   │   ├── client.ts        payAndFetchViaX402 (EIP-712 sign)
+│   │   │   └── header.ts        X-Payment envelope helpers
+│   │   ├── casper/
+│   │   │   ├── signer.ts        casper-js-sdk v5 (Key, Deploy, RPC)
+│   │   │   └── vaultClient.ts   AgentVault logStrategyToVault
+│   │   ├── csprCloud/
+│   │   │   ├── rest.ts          CSPR.cloud REST (raw token auth)
+│   │   │   ├── streaming.ts     SSE: Contract-level events, Deploys
+│   │   │   ├── cesEvents.ts     CES event helpers
+│   │   │   └── x402Facilitator.ts  CSPR.cloud x402 facilitator
+│   │   └── agent/
+│   │       ├── llmStrategy.ts   Anthropic / OpenAI + heuristic
+│   │       └── slippage.ts       BigInt slippage math
+│   ├── tests/                  21 jest tests across 5 suites
+│   ├── scripts/
+│   │   ├── deploy.ts           wasm build + deploy + env write
+│   │   ├── x402Server.ts       tiny demo signal provider
+│   │   ├── verify-setup.ts     preflight checklist (22 checks)
+│   │   └── quickstart.ts       local checklist
+│   ├── dist/                   compiled JS (gitignored)
+│   ├── keys/                   your private key (gitignored)
+│   ├── .env                    your secrets (gitignored)
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── jest.config.js
+├── frontend/                   Static demo UI
+│   └── index.html              CSPR.click connect + backend calls
+├── .github/workflows/
+│   └── ci.yml                  typecheck + test + contract build
+├── .env.example
+├── .gitignore
+├── MIGRATION_NOTES.md          per-version changelog
+├── README.md                   (this file)
+├── SETUP_WINDOWS.md            PowerShell setup walkthrough
+└── LICENSE                     Apache 2.0
+```
+
+---
+
+## 🚀 Quick start (Testnet)
+
+> **Prerequisites**:
+> - **Rust** with the pinned nightly toolchain (see `contracts/odra/rust-toolchain`)
+> - **Node 20+** + **npm 10+**
+> - **wasm-opt** and **wasm-strip** on PATH (or `cargo install` them)
+> - A **Testnet CSPR balance** (≥ 600 CSPR) on the agent key
+> - A **CSPR.cloud API key** from <https://cspr.cloud> (free tier OK)
+> - **binaryen** + **wabt** if you don't have wasm-opt/wasm-strip yet
+
+### 1. Clone & configure
+
+```bash
+git clone <this-repo> parkflow-agent
+cd parkflow-agent
+cp .env.example agent/.env
+# then edit agent/.env → set CSPR_CLOUD_API_KEY
+```
+
+### 2. Generate & fund the agent key
+
+```bash
+cd agent
+mkdir -p keys
+# Option A: use the Casper CLI (any 2.x works)
+casper-client keygen keys/agent.pem
+# Option B: any EC private key, save as PEM
+```
+
+Then **fund the printed public key** at:
+<https://testnet.cspr.live/tools/faucet>
+
+You'll need **~600 CSPR** (2 deploys × 290 CSPR) + some for executor
+calls (~3 CSPR each).
+
+### 3. Build & deploy the contracts
+
+```bash
+cd ../contracts/odra
+cargo +nightly-2025-01-15 odra build
+cd ../../agent
+npm install
+npm run deploy
+```
+
+`npm run deploy` will:
+
+1. Run `cargo +nightly-2025-01-15 odra build` (skippable with `--skip-build`)
+2. Submit two deploy transactions (RevenueEmitter + AgentVault) with
+   `init(...)` args inline
+3. Extract the **package hashes** from the deploy effects
+4. Overwrite `.env.local` with `REVENUE_EMITTER_CONTRACT_HASH=…` and
+   `AGENT_VAULT_CONTRACT_HASH=…`
+
+### 4. Run the demo (3 terminals)
+
+```bash
+# terminal 1 — x402 signal server (:4001)
+cd agent
+npm run x402-server
+
+# terminal 2 — ParkFlow backend + SSE feed (:4000)
+cd agent
+npm run dev
+
+# terminal 3 — serve the frontend
+cd agent
+npx serve ../frontend
+# open http://localhost:3000 in your browser
+```
+
+In the frontend: connect CSPR.click, click **RUN OPTIMIZATION**, watch
+the SSE feed light up as the cycle progresses.
+
+### 5. Run one cycle from CLI
+
+```bash
+cd agent
+npm run cycle
+# → runs the full pipeline once, prints the proposal + execution result
+```
+
+---
+
+## 🌐 Live deploy hashes (Casper 2.0 Testnet)
+
+> Recorded 2026-06-08 from the agent's deploy run.
+
+| Contract        | Package hash                                                          | Gas used  | Deploy tx                                                             |
+|-----------------|-----------------------------------------------------------------------|-----------|-----------------------------------------------------------------------|
+| RevenueEmitter  | `hash-1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f` | 247.7 CSPR | `hash-b7e5da71202af781e3fb2e74355c48fa2bfa110d4556ed7ecef9f79a7d58c5ac` |
+| AgentVault      | `hash-8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d` | 275.2 CSPR | `hash-bafd87e9c94cb03f21068eb2d6620780632dc0cbe236abc101b43c98a7b33d24` |
+
+View on CSPR.live:
+
+- RevenueEmitter → <https://testnet.cspr.live/deploy/1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f>
+- AgentVault → <https://testnet.cspr.live/deploy/8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d>
+
+---
+
+## 🧠 How the agent decides
+
+The decision is produced by **one of two paths**, picked at runtime:
+
+```mermaid
+flowchart LR
+    A[Analyst] --> B{LLM_API_KEY set?}
+    B -- no --> H[decideHeuristic<br/>add_liq if<br/>impact<1% &amp;&amp; signal=bullish]
+    B -- yes --> L[decideStrategyWithLLM<br/>Anthropic or OpenAI]
+    L -.->|fail / malformed| H
+    H --> P[StrategyProposal]
+    L --> P
+```
+
+### `StrategyProposal` shape
+
+```ts
+{
+  action: 'add_liquidity' | 'swap',
+  pair: 'CSPR/sCSPR',
+  tokenIn: 'CSPR',
+  tokenOut: 'sCSPR',
+  amountIn: '1000000000000',     // 1000 CSPR
+  minAmountOut: '…',             // after 0.5% slippage
+  rationale: '…',
+  confidence: 0-100,             // gates execution (< 50 = skip)
+  x402Proof: {
+    paymentHeader,                // 7-colon envelope
+    settleTxHash,                 // x402 facilitator tx
+    facilitator: '…',
+    amountMotes: '1000000',
+    asset: '…',
+    signedAt: unix,
+  },
+  revenueEvent: { timestamp, amount, asset, source, emitter, reference },
+}
+```
+
+---
+
+## 🤝 The x402 handshake
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent
+    participant S as Signal Server
+    participant F as x402 Facilitator<br/>(CSPR.cloud)
+    participant C as Casper Chain
+
+    A->>S: GET /signal
+    S-->>A: 402 + headers<br/>(X-Payment-Address, X-Payment-Amount, etc.)
+
+    Note over A: build EIP-712 typed data<br/>domain + TransferAuthorization
+    A->>A: sign digest with PrivateKey<br/>(casper-eip-712 + casper-js-sdk)
+    A->>A: build X-Payment envelope<br/>(network:payee:amount:sig:nonce:validUntil:payer)
+
+    A->>S: GET /signal + X-Payment header
+    S->>F: verify + settle
+    F->>C: putDeploy(transfer)
+    C-->>F: deployHash
+    F-->>S: settle tx
+    S-->>A: 200 + signal JSON + X-Payment-Settle header
+```
+
+The `X-Payment` header envelope (colon-delimited, 7 fields):
+
+```
+network:payee:amount:signature:nonce:validUntil:payer
+```
+
+Example:
+```
+casper-test:0000…000:1000000:02d5c8fe…b:abcdef1234567890:1718000000:02020691…
+```
+
+---
+
+## ⛽ Gas budget & economics
+
+Measured on Casper 2.0 testnet, 2026-06-08:
+
+| Operation                                  | Consumed   | Gas limit | Refund    |
+|--------------------------------------------|------------|-----------|-----------|
+| Install RevenueEmitter (full init)         | 247.7 CSPR | 260 CSPR  | 12.3 CSPR |
+| Install AgentVault (full init)             | 275.2 CSPR | 290 CSPR  | 14.8 CSPR |
+| `execute_strategy` write per call           | ~3 CSPR    | 3 CSPR    | ~0        |
+| View function call (`owner()` etc.)        | 0.02–0.3   | 3 CSPR    | ~3        |
+| x402 signal payment (CEP-18 transfer)      | 0.001 CSPR | —         | —         |
+| LLM call (Anthropic Haiku 4.5)            | $0.001 USD | —         | —         |
+
+**Per cycle total**: ~0.001 CSPR (x402) + 3 CSPR (AgentVault write) + 0.001 USD (LLM).
+
+---
+
+## ⚙️ Configuration
+
+All env vars live in `agent/.env`. The most important ones:
+
+| Variable                  | Purpose                                                                 |
+|---------------------------|-------------------------------------------------------------------------|
+| `CSPR_CLOUD_API_KEY`       | CSPR.cloud REST + MCP + x402 facilitator (raw token, no `Bearer`)        |
+| `CASPER_RPC_URL`          | Casper node RPC (must end in `/rpc`)                                    |
+| `CASPER_CHAIN_NAME`       | `casper-test` or `casper`                                               |
+| `AGENT_SECRET_KEY_PATH`   | Path to the agent's PEM key (default: `keys/agent.pem`)                 |
+| `AGENT_PUBLIC_KEY`        | Cached public key (auto-derived from PEM on first run)                  |
+| `REVENUE_EMITTER_CONTRACT_HASH` | Set by `npm run deploy`                                             |
+| `AGENT_VAULT_CONTRACT_HASH`     | Set by `npm run deploy`                                             |
+| `X402_FACILITATOR_URL`    | x402 facilitator base URL (default: CSPR.cloud)                         |
+| `X402_SIGNAL_ENDPOINT`    | Signal provider URL (default: `http://localhost:4001/signal`)           |
+| `X402_CEP18_PACKAGE_HASH` | The asset the x402 payment settles in                                  |
+| `LLM_API_KEY`             | Anthropic or OpenAI key. **Optional** — heuristic fallback if unset.     |
+| `LLM_PROVIDER`            | `anthropic` or `openai` (default: anthropic)                            |
+| `LLM_MODEL`               | Model name (default: `claude-haiku-4-5`)                               |
+
+For a full list see `.env.example`.
+
+---
+
+## 🧪 Testing
+
+```bash
+cd agent
+npm test -- --no-coverage
+```
+
+21 tests across 5 suites:
+
+| Suite                        | What it covers                                              |
+|------------------------------|-------------------------------------------------------------|
+| `tests/setup.test.ts`         | env validation, agent keys loaded from PEM                  |
+| `tests/x402-header.test.ts`   | X-Payment envelope build/parse round-trip                    |
+| `tests/streaming.test.ts`    | CSPR.cloud SSE envelope parsing + filtering                  |
+| `tests/agent-logic.test.ts`   | LLM/heuristic strategy decisions, slippage math              |
+| `tests/runcycle.test.ts`      | full cycle integration: success path, low-confidence skip, x402 error path |
+
+---
+
+## 🔧 Operational scripts
+
+| Command                                        | What it does                                                              |
+|------------------------------------------------|--------------------------------------------------------------------------|
+| `npm run build`                                | `tsc` → `dist/`                                                          |
+| `npm run typecheck`                            | `tsc --noEmit`                                                            |
+| `npm test`                                     | jest                                                                      |
+| `npm run dev`                                  | `tsx src/server.ts` (backend on :4000)                                   |
+| `npm run x402-server`                          | `tsx scripts/x402Server.ts` (signal on :4001)                            |
+| `npm run cycle`                                | `tsx src/index.ts` (one full cycle)                                       |
+| `npm run analyst`                              | `tsx src/analyst.ts` (analyst CLI)                                       |
+| `npm run executor`                             | `tsx src/executor.ts` (executor CLI)                                     |
+| `npm run deploy`                               | `tsx scripts/deploy.ts` (build + install)                                |
+| `npm run deploy -- --skip-build`               | skip cargo build                                                         |
+| `npm run deploy -- --only=revenue_emitter`     | deploy only one contract                                                  |
+| `npm run verify`                               | `tsx scripts/verify-setup.ts` (22 preflight checks)                       |
+| `npm run quickstart`                           | `tsx scripts/quickstart.ts` (local checklist)                            |
+
+---
+
+## 🛠 User actions required (sandbox cannot do these)
+
+| Step                                       | Who | Notes                                                                                |
+|--------------------------------------------|-----|--------------------------------------------------------------------------------------|
+| Generate funded key                         | You | `casper-client keygen keys/agent.pem` + faucet ~1000 CSPR                          |
+| Get CSPR.cloud API key                      | You | <https://cspr.cloud> (free tier OK)                                                  |
+| `cargo odra build` & deploy                | You | `npm run deploy` (deploy.ts handles wasm-opt/wasm-strip fallback)                    |
+| Request a sponsored x402 facilitator        | You | ask in the Casper Discord during the buildathon                                    |
+| CSPR.click wallet install                   | You | <https://cspr.click> (for the demo UI)                                              |
+| Record demo video                           | You | capture one full `npm run cycle` against the live testnet                          |
+
+---
+
+## 🔗 Resources
+
+- [Casper AI Toolkit][ai-toolkit]
+- [Odra docs](https://odra.dev/docs/intro)
+- [Casper x402 spec](https://github.com/make-software/casper-x402)
+- [casper-eip-712](https://github.com/casper-ecosystem/casper-eip-712)
+- [CSPR.cloud REST API](https://docs.cspr.cloud/rest-api/reference)
+- [CSPR.cloud Streaming API](https://docs.cspr.cloud/streaming-api/reference)
+- [CSPR.cloud x402 Facilitator](https://docs.cspr.cloud/x402-facilitator-api/)
+- [CSPR.trade MCP](https://mcp.cspr.trade)
+- [DoraHacks Buildathon](https://dorahacks.io/hackathon/2202/detail)
+
+[ai-toolkit]: https://www.casper.network/ai
+[x402]: https://github.com/make-software/casper-x402
+
+---
+
+Built for **Casper Agentic Buildathon 2026**. 🏛
+
+Released under the Apache 2.0 License. See `LICENSE`.

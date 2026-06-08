@@ -1,0 +1,9 @@
+# Odra workspace configuration
+# For Casper Agentic Buildathon 2026 - ParkFlow Agent
+# See https://odra.dev/docs/basics/odra-toml
+
+[[contracts]]
+fqn = "revenue_emitter::revenue_emitter::RevenueEmitter"
+
+[[contracts]]
+fqn = "agent_vault::agent_vault::AgentVault"

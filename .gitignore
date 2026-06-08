@@ -1,0 +1,43 @@
+# ---------- Node ----------
+node_modules/
+dist/
+.npm/
+*.tsbuildinfo
+
+# ---------- Rust / Odra ----------
+contracts/odra/target/
+contracts/odra/wasm/*.opt.wasm
+contracts/odra/wasm/*.wasm.map
+
+# ---------- Secrets — NEVER commit ----------
+keys/
+keys/Account*
+*.pem
+.env
+.env.local
+.env.*.local
+*.key
+
+# ---------- Editor / OS noise ----------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.log
+
+# ---------- Build outputs ----------
+agent/dist/
+frontend/dist/
+*.tsbuildinfo
+
+# ---------- Coverage / test artifacts ----------
+coverage/
+*.lcov
+.nyc_output/
+
+# ---------- Local worktrees / backup ----------
+*.bak
+*.orig
+*.tmp

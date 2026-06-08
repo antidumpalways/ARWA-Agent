@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParkFlow Agent — Casper Buildathon 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+    body { font-family: 'Inter', system_ui, sans-serif; }
+    .title-font { font-family: 'Space Grotesk', system_ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+  <div class="max-w-4xl mx-auto p-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-violet-600 rounded-2xl flex items-center justify-center text-2xl">P</div>
+          <div>
+            <h1 class="title-font text-4xl font-semibold tracking-tighter">ParkFlow Agent</h1>
+            <p class="text-zinc-400 text-sm">Autonomous RWA Yield Optimizer on Casper</p>
+          </div>
+        </div>
+      </div>
+      <div id="net-pill" class="px-4 py-1.5 bg-zinc-900 border border-zinc-800 rounded-3xl text-xs font-medium flex items-center gap-2">
+        <div id="net-dot" class="w-2 h-2 bg-zinc-500 rounded-full"></div>
+        <span id="net-text">Checking…</span>
+      </div>
+    </div>
+
+    <!-- Contract info -->
+    <div id="contracts-card" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-6 hidden">
+      <div class="text-xs uppercase tracking-widest text-zinc-400 mb-2">Contracts (Casper Testnet)</div>
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <div class="text-zinc-500">RevenueEmitter</div>
+          <a id="rev-hash" class="font-mono text-violet-300 hover:text-violet-200 break-all" target="_blank">—</a>
+        </div>
+        <div>
+          <div class="text-zinc-500">AgentVault</div>
+          <a id="vault-hash" class="font-mono text-violet-300 hover:text-violet-200 break-all" target="_blank">—</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wallet connection -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-6 flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-widest text-zinc-400 mb-1">Wallet</div>
+        <div id="wallet-pubkey" class="font-mono text-sm">Not connected</div>
+      </div>
+      <button id="btn-connect" class="px-5 py-2 bg-violet-600 text-white font-medium rounded-2xl hover:bg-violet-500 transition text-sm">
+        Connect CSPR.click
+      </button>
+    </div>
+
+    <!-- Stats (live from contract) -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="text-zinc-400 text-xs uppercase tracking-widest mb-1">Vault Total Assets</div>
+        <div id="total-assets" class="text-4xl font-semibold tabular-nums">— <span class="text-base font-normal text-zinc-400">CSPR</span></div>
+        <div id="total-assets-sub" class="text-zinc-500 text-xs mt-1">live from contract</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="text-zinc-400 text-xs uppercase tracking-widest mb-1">Agent Reputation</div>
+        <div id="reputation" class="text-4xl font-semibold tabular-nums">—</div>
+        <div id="reputation-sub" class="text-zinc-500 text-xs mt-1">on-chain counter</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="text-zinc-400 text-xs uppercase tracking-widest mb-1">Total Strategies</div>
+        <div id="total-strategies" class="text-4xl font-semibold tabular-nums">—</div>
+        <div id="total-strategies-sub" class="text-zinc-500 text-xs mt-1">executed cycles</div>
+      </div>
+    </div>
+
+    <!-- Main action -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 mb-8">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <div class="uppercase text-xs tracking-[2px] text-violet-400 font-medium">AGENT CONTROL</div>
+          <div class="text-2xl font-semibold mt-1">Run a yield-optimization cycle</div>
+        </div>
+        <button id="btn-run" class="px-8 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-zinc-200 transition flex items-center gap-2 text-sm disabled:opacity-50" disabled>
+          <span>RUN OPTIMIZATION</span>
+          <span class="text-lg">→</span>
+        </button>
+      </div>
+
+      <div id="agent-status" class="text-sm text-zinc-400 font-mono">Connect wallet + backend to start</div>
+
+      <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <label class="block">
+          <span class="text-zinc-400 text-xs uppercase tracking-widest">Revenue amount (CSPR)</span>
+          <input id="in-amount" type="number" min="0" step="0.0001" value="1000"
+            class="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 font-mono" />
+        </label>
+        <label class="block">
+          <span class="text-zinc-400 text-xs uppercase tracking-widest">Source</span>
+          <input id="in-source" type="text" value="parking-lot-frontend"
+            class="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2 font-mono" />
+        </label>
+      </div>
+
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-3">
+          <div class="uppercase text-xs tracking-widest text-zinc-500">LIVE CYCLE LOG</div>
+          <div id="sse-pill" class="text-[10px] uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+            <div id="sse-dot" class="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
+            <span id="sse-text">stream offline</span>
+          </div>
+        </div>
+        <div id="log" class="bg-black/50 border border-zinc-800 rounded-2xl p-4 text-xs font-mono space-y-1 h-56 overflow-auto">
+          <div class="text-zinc-500">[boot] awaiting connection...</div>
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <div class="uppercase text-xs tracking-widest text-zinc-500 mb-3">ON-CHAIN CES EVENTS (live)</div>
+        <div id="ces-log" class="bg-black/50 border border-zinc-800 rounded-2xl p-4 text-xs font-mono space-y-1 h-40 overflow-auto">
+          <div class="text-zinc-500">[ces] no events yet — start the backend to subscribe to CSPR.cloud streaming</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- x402 & MCP Highlights -->
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="font-medium mb-1 flex items-center gap-2">x402 Micropayment</div>
+        <div class="text-zinc-400" id="x402-last">No x402 payment yet this session.</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="font-medium mb-1 flex items-center gap-2">CSPR.trade MCP</div>
+        <div class="text-zinc-400">Live quotes & LP via the 24-tool MCP surface — non-custodial.</div>
+      </div>
+    </div>
+
+    <div class="mt-8 text-center text-[10px] text-zinc-500">
+      Built with Casper AI Toolkit • Odra 2.6 • x402 • CSPR.trade MCP • CSPR.cloud REST + Streaming • Buildathon 2026
+    </div>
+  </div>
+
+  <script>
+    // -------- CSPR.click wallet integration --------
+    const WALLET_PROVIDER_URL = 'https://cspr.click';
+    let connectedPubkey = null;
+    let eventSource = null;
+
+    async function connectWallet() {
+      addLog('[wallet] requesting connection to CSPR.click...');
+      try {
+        if (window.csprclick) {
+          const result = await window.csprclick.requestConnection();
+          connectedPubkey = result.publicKey;
+        } else {
+          addLog('[wallet] CSPR.click not detected. Open ' + WALLET_PROVIDER_URL + ' to install.', 'action');
+          window.open(WALLET_PROVIDER_URL, '_blank');
+          return;
+        }
+        document.getElementById('wallet-pubkey').textContent = connectedPubkey;
+        document.getElementById('btn-connect').textContent = 'Connected ✓';
+        document.getElementById('btn-connect').disabled = true;
+        document.getElementById('btn-run').disabled = false;
+        addLog('[wallet] connected: ' + connectedPubkey.slice(0, 20) + '...', 'success');
+      } catch (e) {
+        addLog('[wallet] connection failed: ' + e.message, 'action');
+      }
+    }
+
+    // -------- backend integration --------
+    const API_BASE = 'http://localhost:4000';
+    const EXPLORER = 'https://testnet.cspr.live';
+
+    async function fetchHealth() {
+      try {
+        const h = await fetch(API_BASE + '/api/health').then(r => r.json());
+        if (h.ok) {
+          document.getElementById('net-dot').className = 'w-2 h-2 bg-emerald-500 rounded-full animate-pulse';
+          document.getElementById('net-text').textContent = 'Live on ' + h.network;
+        }
+        // Show contract hashes if available
+        if (h.contracts) {
+          const card = document.getElementById('contracts-card');
+          card.classList.remove('hidden');
+          const setHash = (id, h) => {
+            const el = document.getElementById(id);
+            if (h) {
+              el.textContent = h;
+              el.href = EXPLORER + '/contract/' + h;
+            } else {
+              el.textContent = '(not deployed)';
+              el.removeAttribute('href');
+            }
+          };
+          setHash('rev-hash', h.contracts.revenue_emitter);
+          setHash('vault-hash', h.contracts.agent_vault);
+        }
+        return h;
+      } catch (e) {
+        document.getElementById('net-dot').className = 'w-2 h-2 bg-red-500 rounded-full';
+        document.getElementById('net-text').textContent = 'Backend offline';
+        return null;
+      }
+    }
+
+    async function refreshState() {
+      try {
+        const s = await fetch(API_BASE + '/api/state').then(r => r.json());
+        if (s.totalAssets !== undefined) {
+          const motes = Number(s.totalAssets);
+          const cspr = (motes / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+          document.getElementById('total-assets').innerHTML = cspr + ' <span class="text-base font-normal text-zinc-400">CSPR</span>';
+          document.getElementById('reputation').textContent = s.reputation ?? 0;
+          document.getElementById('total-strategies').textContent = s.totalStrategies ?? 0;
+        }
+      } catch (e) { /* backend offline */ }
+    }
+
+    async function runAgentCycle() {
+      const btn = document.getElementById('btn-run');
+      btn.disabled = true;
+      const amountCspr = document.getElementById('in-amount').value;
+      const source = document.getElementById('in-source').value;
+      const amountMotes = String(Math.floor(Number(amountCspr) * 1e9));
+      document.getElementById('agent-status').textContent = 'Analyst running...';
+      addLog('[analyst] revenue event: ' + amountCspr + ' CSPR from ' + source);
+      addLog('[mcp] querying CSPR.cloud (account, history) + CSPR.trade (quote)...');
+
+      try {
+        const res = await fetch(API_BASE + '/api/cycle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amountMotes,
+            source,
+            ownerAddress: connectedPubkey,
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'cycle failed');
+
+        const p = data.proposal;
+        addLog('[x402] paid ' + (p.x402Proof?.amountMotes ?? '?') + ' motes for utilization signal', 'action');
+        addLog('[x402] settle tx: ' + (p.x402Proof?.settleTxHash?.slice(0, 16) ?? '—'), 'action');
+        addLog('[analyst] proposal: ' + p.action + ' on ' + p.pair + ' (' + p.confidence + '% confidence)', 'action');
+        document.getElementById('x402-last').textContent =
+          'Last payment: ' + (p.x402Proof?.amountMotes ?? '?') + ' motes → ' + (p.x402Proof?.settleTxHash?.slice(0, 16) ?? '—');
+
+        if (data.execution) {
+          document.getElementById('agent-status').textContent = 'Executor running...';
+          addLog('[executor] built tx via CSPR.trade MCP');
+          addLog('[executor] signed + submitted: ' + (data.execution.txHash?.slice(0, 16) ?? '—'), 'action');
+          addLog('[vault] logged decision on-chain: ' + (data.execution.vaultResult?.txHash?.slice(0, 16) ?? '—'), 'success');
+          addLog('[cycle] done ✓', 'success');
+        } else {
+          addLog('[cycle] skipped (low confidence)', 'action');
+        }
+        document.getElementById('agent-status').textContent = 'Cycle complete';
+        await refreshState();
+      } catch (e) {
+        addLog('[error] ' + e.message, 'action');
+        document.getElementById('agent-status').textContent = 'Cycle failed: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function addLog(msg, type = 'info') {
+      const logEl = document.getElementById('log');
+      const div = document.createElement('div');
+      div.className =
+        type === 'success' ? 'text-emerald-400' :
+        type === 'action'  ? 'text-violet-400'  :
+                             'text-zinc-400';
+      const ts = new Date().toLocaleTimeString();
+      div.textContent = `[${ts}] ${msg}`;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function addCesLog(msg, type = 'info') {
+      const el = document.getElementById('ces-log');
+      const div = document.createElement('div');
+      div.className =
+        type === 'success' ? 'text-emerald-400' :
+        type === 'action'  ? 'text-violet-400'  :
+                             'text-zinc-400';
+      const ts = new Date().toLocaleTimeString();
+      div.textContent = `[${ts}] ${msg}`;
+      el.appendChild(div);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function connectEventStream() {
+      try {
+        if (eventSource) eventSource.close();
+        eventSource = new EventSource(API_BASE + '/api/events');
+        eventSource.addEventListener('strategy', (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            addCesLog('STRATEGY ' + (d.action || '?') + ' on ' + (d.pair || '?') +
+                      ' · ' + (d.outcome || '?') +
+                      ' · tx ' + ((d.tx_hash || d.deploy_hash || '').slice(0, 16)), 'success');
+          } catch {}
+        });
+        eventSource.addEventListener('revenue', (ev) => {
+          try {
+            const d = JSON.parse(ev.data);
+            addCesLog('REVENUE +' + d.amount + ' motes from ' + d.source +
+                      ' · ' + d.reference, 'action');
+          } catch {}
+        });
+        eventSource.onopen = () => {
+          document.getElementById('sse-dot').className = 'w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse';
+          document.getElementById('sse-text').textContent = 'CSPR.cloud live';
+        };
+        eventSource.onerror = () => {
+          document.getElementById('sse-dot').className = 'w-1.5 h-1.5 bg-red-500 rounded-full';
+          document.getElementById('sse-text').textContent = 'stream error';
+        };
+      } catch (e) {
+        console.warn('EventSource not available', e);
+      }
+    }
+
+    // boot
+    document.getElementById('btn-connect').addEventListener('click', connectWallet);
+    document.getElementById('btn-run').addEventListener('click', runAgentCycle);
+    window.onload = () => {
+      fetchHealth();
+      refreshState();
+      setInterval(() => { fetchHealth(); refreshState(); }, 5000);
+      connectEventStream();
+    };
+  </script>
+</body>
+</html>
