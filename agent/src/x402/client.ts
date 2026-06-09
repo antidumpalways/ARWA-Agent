@@ -133,6 +133,10 @@ export async function payAndFetchViaX402<T = any>(
 
   // 6) build the X-Payment header. The Casper x402 facilitator expects a
   //    colon-delimited envelope — see https://github.com/make-software/casper-x402.
+  // Read the payer fresh from process.env (cfg snapshot may be stale — keys
+  // are loaded lazily by getAgentKeys and AGENT_PUBLIC_KEY is filled in after
+  // loadConfig() runs).
+  const payer = process.env.AGENT_PUBLIC_KEY ?? cfg.AGENT_PUBLIC_KEY ?? '';
   const paymentHeader = buildPaymentHeaderEnvelope({
     network: cfg.CASPER_NETWORK,
     payee: reqs.address,
@@ -140,7 +144,7 @@ export async function payAndFetchViaX402<T = any>(
     signature,
     nonce: reqs.nonce,
     validUntil: reqs.validUntil,
-    payer: cfg.AGENT_PUBLIC_KEY ?? '',
+    payer,
   });
 
   // 7) retry with proof

@@ -41,3 +41,8 @@ coverage/
 *.bak
 *.orig
 *.tmp
+
+# Runtime logs
+agent/x402-server.log
+agent/x402-server.err
+agent/backend.log

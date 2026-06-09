@@ -97,11 +97,29 @@ export async function signAndSubmitDeploy(
   deploy.sign(privateKey);
 
   const submit: PutDeployResult = await client.putDeploy(deploy);
-  const deployHash =
-    (submit as any).deploy_hash ??
-    (submit as any).hash ??
-    (submit as any).transactionHash ??
-    String(submit);
+  // `submit` is a typed object — extract hex string.
+  // Shape: { apiVersion, deployHash: { hashBytes: Uint8Array(32) }, rawJSON: { deploy_hash, ... } }
+  let deployHash: string;
+  const sh = submit as any;
+  if (typeof sh === 'string') {
+    deployHash = sh;
+  } else if (sh?.deployHash?.hashBytes) {
+    // SDK v5: deployHash is a typed Hash with Uint8Array(32) hashBytes
+    deployHash = Buffer.from(sh.deployHash.hashBytes).toString('hex');
+  } else if (sh?.rawJSON?.deploy_hash) {
+    // Fallback: the raw response body always has the hex string
+    deployHash = String(sh.rawJSON.deploy_hash);
+  } else if (sh?.hashBytes) {
+    deployHash = Buffer.from(sh.hashBytes).toString('hex');
+  } else if (sh?.deploy_hash) {
+    deployHash = String(sh.deploy_hash);
+  } else if (sh?.hash) {
+    deployHash = String(sh.hash);
+  } else if (sh?.toHex) {
+    deployHash = sh.toHex();
+  } else {
+    deployHash = String(submit);
+  }
 
   const result = await client.waitForDeploy(deploy, 60_000);
   return { deployHash, result };
@@ -172,12 +190,18 @@ export function buildContractCallDeploy(
   if (contractVersion !== null) {
     // SDK v5 signature: `new StoredVersionedContractByHash(hash, entryPoint, args, version)`.
     // The version defaults to 1 for a brand-new package.
+    // Strip the "hash-" prefix that we store in .env — ContractPackageHash.fromJSON
+    // wants 64-char hex (32 raw bytes) and chokes on the prefix with
+    // "Base16 data cannot have length 69 (must be even)".
+    const pkgHex = contractHash.startsWith('hash-')
+      ? contractHash.slice(5)
+      : contractHash.replace(/^0x/, '');
     // `ContractPackageHash.fromJSON(hex)` is the only working factory — the
     // public constructor is incomplete and `toBytes` fails on it.
     // The .d.ts type says it wants a `ContractHash`, but the runtime
     // accepts a `ContractPackageHash`; the cast is safe.
     session.storedVersionedContractByHash = new (StoredVersionedContractByHash as any)(
-      ContractPackageHash.fromJSON(contractHash),
+      ContractPackageHash.fromJSON(pkgHex),
       entryPoint,
       clArgs,
       contractVersion

@@ -67,8 +67,10 @@ app.get('/signal', (req, res) => {
   const lot = String(req.query.lot ?? 'unknown');
   const payment = req.header('X-Payment') || req.header('x-payment');
   if (!validatePayment(payment)) {
+    console.log(`[x402-server] rejected X-Payment: ${payment}`);
     return paymentRequired(res);
   }
+  console.log(`[x402-server] accepted X-Payment for lot=${lot}`);
   // synthetic but reproducible signal
   const hour = new Date().getUTCHours();
   const baseUtil = 60 + (hour % 12) * 2;

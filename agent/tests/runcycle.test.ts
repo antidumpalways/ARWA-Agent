@@ -26,6 +26,7 @@ import * as llmStrategy from '../src/agent/llmStrategy';
 import * as executor from '../src/executor';
 
 const mockedGetAccountInfo = casperMcp.getAccountInfo as jest.Mock;
+const mockedGetRecentRevenueEvents = casperMcp.getRecentRevenueEvents as jest.Mock;
 const mockedGetQuote = csprTradeMcp.getQuote as jest.Mock;
 const mockedGetPortfolioValue = csprTradeMcp.getPortfolioValue as jest.Mock;
 const mockedPayAndFetch = x402client.payAndFetchViaX402 as jest.Mock;
@@ -65,6 +66,8 @@ describe('runCycle integration', () => {
       algorithm: 1 as any,
     });
 
+    mockedGetRecentRevenueEvents.mockResolvedValue([]);
+    
     mockedGetAccountInfo.mockResolvedValue({
       publicKey: '01agent-pk-hex',
       balance: '5000000000000',
@@ -191,3 +194,5 @@ describe('runCycle integration', () => {
     ).rejects.toThrow(/x402/);
   });
 });
+
+
