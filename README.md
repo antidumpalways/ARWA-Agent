@@ -22,14 +22,16 @@
 4. [Repository layout](#-repository-layout)
 5. [Quick start](#-quick-start)
 6. [Live deploy hashes](#-live-deploy-hashes)
-7. [How the agent decides](#-how-the-agent-decides)
-8. [The x402 handshake](#-the-x402-handshake)
-9. [Gas budget & economics](#-gas-budget--economics)
-10. [Configuration](#-configuration)
-11. [Testing](#-testing)
-12. [Operational scripts](#-operational-scripts)
-13. [User actions required](#-user-actions-required)
-14. [Resources](#-resources)
+7. [Business narrative](#-business-narrative-solving-real-world-rwa-liquidity)
+8. [Architecture Scalability & Production Readiness](#-architecture-scalability--production-readiness)
+9. [How the agent decides](#-how-the-agent-decides)
+10. [The x402 handshake](#-the-x402-handshake)
+11. [Gas budget & economics](#-gas-budget--economics)
+12. [Configuration](#-configuration)
+13. [Testing](#-testing)
+14. [Operational scripts](#-operational-scripts)
+15. [User actions required](#-user-actions-required)
+16. [Resources](#-resources)
 
 ---
 
@@ -396,6 +398,175 @@ View on CSPR.live:
 
 ---
 
+## 🏢 Business narrative: solving real-world RWA liquidity
+
+**For business and product judges.** This section tells the
+"Parking Blox" story that the demo script and frontend
+visualize. The technical architecture is described separately
+in the next section.
+
+### The problem
+
+A parking operator (e.g. a mall, an airport, a city operator)
+collects small amounts of cashflow from many physical
+transactions. This money sits idle in an operating account
+between collections. Even with conservative yield strategies,
+**the float alone could earn 5–10% APY if it were tokenized
+and routed to a DeFi protocol on the same day.**
+
+Today this doesn't happen because:
+
+1. **Reconciliation is manual** — bank statements and parking
+   system logs don't agree without a human reconciling them.
+2. **No audit trail** — there's no immutable record of which
+   transaction triggered which yield deposit.
+3. **Privacy** — putting a car license plate on a public
+   blockchain is a non-starter.
+
+### The solution
+
+ParkFlow Agent turns each parking transaction into an
+**immutable, privacy-preserving, on-chain record** that a
+yield strategy can act on, end-to-end, without a human:
+
+| Real-world event | On-chain representation |
+|---|---|
+| Car exits, pays $10 | `RevenueEmitter.emit_revenue(10 USD, "P1 - Gate Keluar Utama", sha256(plat\|time\|amount))` |
+| Operator runs agent | Agent reads events via Casper RPC, computes aggregate forecast |
+| Agent decides strategy | Pays 0.001 CSPR via x402 to a signal server (e.g. weather API), gets back utilization forecast |
+| Agent executes | Calls `AgentVault.execute_strategy(...)` with the decision, x402 proof, and on-chain tx hash |
+| Auditor inspects | Reads the `DecisionLog` ring buffer on-chain — full provenance, every action attributable |
+
+The receipt hash is a **SHA-256 fingerprint** of `(license-plate
++ exit-time + amount)` — the audit can prove a specific
+transaction was recorded without exposing the plate itself.
+
+### Why Casper
+
+* **Native CSPR** is the settlement asset, no bridge needed.
+* **CES events** make every strategy decision observable in
+  real time via CSPR.cloud streaming.
+* **x402** is Casper-native micropayments — the agent can pay
+  for off-chain data without a custodian.
+* **Odra 2.7** lets the same Rust codebase compile for both
+  testnet iteration and mainnet production.
+
+---
+
+## 🏗 Architecture Scalability & Production Readiness
+
+**For technical judges.** This section is the answer to "is
+this a parking-lot toy, or a general RWA primitive?"
+
+### Generic data shape
+
+The `RevenueEmitter` contract does **not** hardcode any
+parking-lot-specific concept. Its event shape is:
+
+```rust
+pub struct RevenueEvent {
+    pub timestamp: u64,         // block time
+    pub amount: U256,          // any token
+    pub asset: Address,        // CEP-18 contract or zero (= native)
+    pub source: String,        // free-text up to 64 chars
+    pub emitter: Address,      // who pushed the event
+    pub reference: String,     // free-text up to 128 chars (receipt hash, invoice id, etc.)
+}
+```
+
+The `source` field is the **only** field that is a free-text
+label. In the demo we set it to `"P1 - Gate Keluar Utama"`.
+Other industries use the same field for:
+
+| Industry | `source` value example | `reference` value example |
+|---|---|---|
+| Parking lot (demo) | `P1 - Gate Keluar Utama` | `sha256(plat\|time\|amount)` |
+| Rental property | `Apt-3B-Jakarta` | `invoice-2026Q2-0142` |
+| Music royalties | `Track-Id-123-Spotify` | `stream-batch-5678` |
+| Carbon credit | `Batch-Forest-2026Q2` | `verify-report-9921` |
+| Solar farm | `Site-Tucson-AZ-7` | `meter-reading-18:00` |
+
+No contract change is needed. The same deployed
+`RevenueEmitter` and `AgentVault` accept any of these.
+
+### Component boundaries
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ IoT / ERP / Web │     │ IoT / ERP / Web │     │ IoT / ERP / Web │
+│ (parking lot)   │     │ (rental)        │     │ (royalties)     │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         └───────────────────────┴───────────────────────┘
+                                 │
+                    emit_revenue(…)  (same on-chain shape)
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │  RevenueEmitter        │  (one contract,
+                    │  hash-1271…d            │   many issuers)
+                    └────────────┬───────────┘
+                                 │  events
+                                 ▼
+                    ┌────────────────────────┐
+                    │  ParkFlow Agent (Node) │  (one agent
+                    │  reads events           │   per operator)
+                    │  pays x402              │
+                    │  decides strategy       │
+                    └────────────┬───────────┘
+                                 │  execute_strategy
+                                 ▼
+                    ┌────────────────────────┐
+                    │  AgentVault            │  (one contract,
+                    │  hash-8c70…6b           │   shared audit log)
+                    └────────────────────────┘
+```
+
+**Horizontal scale**: one `RevenueEmitter` and one
+`AgentVault` per operator (or one shared for an industry
+consortium). Agent instances scale linearly with the number
+of IoT sources they watch.
+
+### Where it is real, and where it is demo
+
+| Component | Status |
+|---|---|
+| Contracts (`RevenueEmitter`, `AgentVault`) | ✅ Deployed & live on Casper 2.0 testnet |
+| Casper signing & submission | ✅ Real PEM-based, real RPC, real deploys |
+| CSPR.cloud REST + Streaming + MCP | ✅ Real endpoints, real responses |
+| CSPR.trade MCP (24-tool surface) | ✅ Real DEX integration |
+| x402 client (EIP-712 sign + envelope) | ✅ Real signature, real envelope |
+| x402 server (hand-rolled) | 🟡 Real EIP-712 verification, in-memory nonce, real on-chain event aggregation via Casper RPC |
+| LLM strategy | 🟡 Code path is real (Anthropic + OpenAI supported), demo runs the deterministic heuristic |
+| CEP-18 token | 🟡 Zero address placeholder — production needs a real CEP-18 contract for non-native assets |
+| CSPR.cloud facilitator | 🟡 Client implemented, demo uses local settlement (allowlist + nonce) |
+
+### Production gaps, and what it would take to close them
+
+1. **Real CSPR.cloud x402 facilitator** — the server currently
+   uses an in-memory nonce store and a local allowlist. A
+   production deploy would route every settlement through
+   `x402-facilitator.cspr.cloud`. The client wrapper is already
+   implemented in `csprCloud/x402Facilitator.ts`.
+2. **Real CEP-18 token** — `token_in`/`token_out` are
+   `account-hash-000…0` in the demo. To run a real swap the
+   operator would deploy a CEP-18 contract (or use an existing
+   one like CSPR.trade's LP tokens) and set the package hash
+   in `.env`.
+3. **Persistence for nonces and forecasts** — the in-memory
+   `Set` and event log would be replaced by Redis or SQLite.
+4. **TLS / reverse proxy** — the demo server binds to
+   `localhost`. A production deploy would sit behind Caddy or
+   nginx with a real certificate.
+5. **Multi-tenant AgentVault** — one shared vault for many
+   agents. The current contract supports this — the
+   `reputation[agent]` mapping is per-address.
+6. **LLM with audit** — when `LLM_API_KEY` is set, decisions
+   include the LLM prompt and response. For regulated
+   industries this would be persisted to the decision log.
+
+---
+
 ## 🧠 How the agent decides
 
 The decision is produced by **one of two paths**, picked at runtime:
@@ -549,6 +720,8 @@ npm test -- --no-coverage
 | `npm run deploy`                               | `tsx scripts/deploy.ts` (build + install)                                |
 | `npm run deploy -- --skip-build`               | skip cargo build                                                         |
 | `npm run deploy -- --only=revenue_emitter`     | deploy only one contract                                                  |
+| `npm run simulate`                             | `tsx scripts/simulate-parking-revenue.ts` (push 5–10 revenue events)      |
+| `npm run simulate -- --count=10 --rate=0.15`   | custom count and CSPR/USD rate                                            |
 | `npm run verify`                               | `tsx scripts/verify-setup.ts` (22 preflight checks)                       |
 | `npm run quickstart`                           | `tsx scripts/quickstart.ts` (local checklist)                            |
 

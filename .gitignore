@@ -46,3 +46,4 @@ coverage/
 agent/x402-server.log
 agent/x402-server.err
 agent/backend.log
+agent/.parkflow-events.json
