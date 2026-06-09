@@ -398,6 +398,13 @@ View on CSPR.live:
 
 ## 🧠 How the agent decides
 
+> **Vocabulary first.** Throughout this README:
+> - **Agent** = the autonomous Node process that owns the observe→decide→act loop, holds the private key, signs deploys, and is the entity with *agency* (a manajer with goals and tools).
+> - **LLM** = a stateless text-to-text program (a *konsultan*); it can suggest a strategy, but it has no key, no balance, and no ability to submit a deploy.
+>
+> The Agent is in charge. The LLM is *one optional reasoning backend* the
+> Agent consults — like a manajer who sometimes phones a konsultan.
+
 The decision is produced by **one of two paths**, picked at runtime:
 
 ```mermaid
