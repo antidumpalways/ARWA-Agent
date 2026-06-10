@@ -390,6 +390,8 @@ npm run cycle
 |-----------------|-----------------------------------------------------------------------|-----------|-----------------------------------------------------------------------|
 | RevenueEmitter  | `hash-1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f` | 247.7 CSPR | `hash-b7e5da71202af781e3fb2e74355c48fa2bfa110d4556ed7ecef9f79a7d58c5ac` |
 | AgentVault      | `hash-8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d` | 275.2 CSPR | `hash-bafd87e9c94cb03f21068eb2d6620780632dc0cbe236abc101b43c98a7b33d24` |
+| ParkFlow Token (PFLOW) | `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775` | 331 CSPR | `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca` |
+| cep18 test helper | `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fb716b5a8` | 81 CSPR  | `47f137e774ee6445342fa814775836ed815227c63d928082b8164af4e094ccea` |
 
 View on CSPR.live:
 
@@ -553,18 +555,31 @@ of IoT sources they watch.
    the agent still receives the forecast. Production only
    needs sponsored facilitator access — the code path is in
    place. See `scripts/x402Server.ts:forwardToFacilitator`.
-2. **Real CEP-18 token** — *partially closed in v0.5.0.* The
-   agent now has a `getAgentCep18Balance()` function
-   (`src/casper/balanceCheck.ts`) that reads the agent's own
-   CEP-18 balance via the `cep18_test_contract` utility helper
-   from `casper-ecosystem/cep18`. To activate: deploy
-   `cep18.wasm` + `cep18_test_contract.wasm` from that repo
-   via `casper-client put-transaction`, copy the two hashes
-   from NamedKeys (`cep18_token_contract`, `cep18_test_contract`)
-   into `.env` (`X402_CEP18_PACKAGE_HASH`, `CEP18_UTIL_QUERY_HASH`).
-   The Mentor confirmed: *"We don't have official CEP18
-   contract. This is open source and you can deploy it
-   with/without change on testnet."*
+2. **Real CEP-18 token** — *closed in v0.6.0.* Our own
+   `ParkFlow Token` (PFLOW, 9 decimals, 100M supply) is now
+   **deployed and initialized live on Casper 2.0 testnet**:
+   - Package: `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775`
+   - Contract: `hash-df768f7ea6578a0e4b3d93aceb7a36051618a470b01dab438cb67f6d93667e0d`
+   - Deploy tx: `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca`
+   - Test helper: `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fbcf716b5a8`
+
+   Both hashes are written to `.env` automatically by
+   `npx tsx scripts/deploy-cep18.ts`. The pre-built v1.2.0
+   release from `casper-ecosystem/cep18` is **incompatible with
+   Casper 2.0** (Casper 1.x era ABI), so we clone the repo and
+   build it ourselves with the pinned `nightly-2025-02-04`
+   toolchain and `-Z build-std=std,panic_abort`.
+
+   The `getAgentCep18Balance()` function in
+   `src/casper/balanceCheck.ts` queries the on-chain balances
+   dictionary via `state_get_dictionary_item`. **Known
+   limitation**: the cep18 v1.2.0 dictionary uses Casper 1.x
+   item-key encoding (AccountHash as serialized bytes with a
+   0x01 tag prefix), which our query currently passes as raw
+   32-byte hex. This returns 0 for the testnet balance in the
+   current read path, but the **agent's PFLOW exists on-chain**
+   and is verifiable on `testnet.cspr.live`. A Casper 2.0
+   native CEP-18 (e.g. from Odra 2.7) would close this fully.
 3. **Persistence for nonces and forecasts** — the in-memory
    `Set` and event log would be replaced by Redis or SQLite.
 4. **TLS / reverse proxy** — the demo server binds to

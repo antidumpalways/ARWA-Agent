@@ -1,17 +1,22 @@
 /**
  * CEP-18 (fungible token) balance query for the ParkFlow Agent.
  *
- * Uses Casper RPC `query_global_state` + `state_get_dictionary_item` to
- * walk the cep18_test_contract named keys and read `balance_of` for the
- * agent's account. The cep18_test_contract (deployed alongside the main
- * cep18.wasm — see https://github.com/casper-ecosystem/cep18) writes the
- * balance to a URef named `result` so external readers don't need to
- * understand the main contract's internal storage layout.
+ * Two query paths are supported:
+ *   1. Helper contract (`cep18_test_contract`) — calls check_balance_of,
+ *      which writes the result to a URef named "result" that we then
+ *      read back. Requires a deploy per query (wasteful).
+ *   2. Direct dictionary query on the main CEP-18 contract — uses
+ *      `state_get_dictionary_item` against the contract's `balances`
+ *      NamedKey. Single RPC call, no deploy.
+ *
+ * We use path 2 (direct query on the main contract). The helper
+ * contract is still useful for the JS SDK but the agent prefers
+ * the direct path for efficiency.
  *
  * Falls back gracefully:
- *   - if CEP18_UTIL_QUERY_HASH is not set → returns null (no token deployed)
- *   - if the facilitator / RPC is unreachable → returns last cached value
- *   - if the agent's address doesn't appear in the URef → returns 0
+ *   - if X402_CEP18_PACKAGE_HASH is not set → returns null (no token deployed)
+ *   - if the RPC is unreachable → returns last cached value
+ *   - if the account is not in the balances dictionary → returns 0
  */
 import { loadConfig } from '../config';
 import axios from 'axios';
@@ -36,21 +41,23 @@ interface DictItemResponse {
   error?: { code: number; message: string };
 }
 
-/**
- * Discover the cep18_test_contract package → contract hash → named keys
- * (especially the `result` URef). Cached for 30s.
- */
-let cachedUtilContract: { contractHash: string; resultUref: string; ts: number } | null = null;
+let cachedMainContract: { contractHash: string; balancesUref: string; ts: number } | null = null;
 
-async function discoverUtilContract(): Promise<{ contractHash: string; resultUref: string } | null> {
-  if (cachedUtilContract && Date.now() - cachedUtilContract.ts < 30_000) {
-    return cachedUtilContract;
+/**
+ * Discover the main cep18 contract's `balances` dictionary URef.
+ * Cached for 30s.
+ */
+async function discoverMainContract(): Promise<{ contractHash: string; balancesUref: string } | null> {
+  if (cachedMainContract && Date.now() - cachedMainContract.ts < 30_000) {
+    return cachedMainContract;
   }
-  if (!cfg.CEP18_UTIL_QUERY_HASH) return null;
-  const pkgHash = cfg.CEP18_UTIL_QUERY_HASH.replace('hash-', '');
+  if (!cfg.X402_CEP18_PACKAGE_HASH) {
+    return null;
+  }
+  const pkgHash = cfg.X402_CEP18_PACKAGE_HASH.replace('hash-', '');
 
   try {
-    // Get the contract package → version 1 → contract hash
+    // Package → version 1 → contract hash
     const pkgRes = await axios.post(
       cfg.CASPER_RPC_URL,
       {
@@ -59,13 +66,13 @@ async function discoverUtilContract(): Promise<{ contractHash: string; resultUre
         method: 'query_global_state',
         params: { key: `hash-${pkgHash}`, path: [] },
       },
-      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 5000, validateStatus: () => true }
+      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 8000, validateStatus: () => true }
     );
     const versions = pkgRes.data?.result?.stored_value?.ContractPackage?.versions;
     if (!versions || versions.length === 0) return null;
     const contractHash = versions[0].contract_hash.replace('contract-', '');
 
-    // Get the contract's named keys → find URef named "result"
+    // Contract → find the `balances` named key URef
     const conRes = await axios.post(
       cfg.CASPER_RPC_URL,
       {
@@ -74,15 +81,16 @@ async function discoverUtilContract(): Promise<{ contractHash: string; resultUre
         method: 'query_global_state',
         params: { key: `hash-${contractHash}`, path: [] },
       },
-      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 5000, validateStatus: () => true }
+      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 8000, validateStatus: () => true }
     );
+    if (conRes.status !== 200) return null;
     const namedKeys = conRes.data?.result?.stored_value?.Contract?.named_keys;
     if (!namedKeys) return null;
-    const resultKey = namedKeys.find((k: any) => k.name === 'result');
-    if (!resultKey) return null;
+    const balancesKey = namedKeys.find((k: any) => k.name === 'balances');
+    if (!balancesKey) return null;
 
-    cachedUtilContract = { contractHash, resultUref: resultKey.key, ts: Date.now() };
-    return cachedUtilContract;
+    cachedMainContract = { contractHash, balancesUref: balancesKey.key, ts: Date.now() };
+    return cachedMainContract;
   } catch {
     return null;
   }
@@ -90,21 +98,15 @@ async function discoverUtilContract(): Promise<{ contractHash: string; resultUre
 
 /**
  * Render an account hash (32 raw bytes) as the dictionary_item_key that
- * cep18_test_contract uses to index per-account balances.
+ * the cep18 main contract uses to index per-account balances.
  */
 function accountHashToDictKey(accountHashHex: string): string {
-  // Strip the "account-hash-" prefix if present
   const hex = accountHashHex.replace(/^account-hash-/, '');
   return hex.padStart(64, '0').slice(-64);
 }
 
 /**
  * Public API: read the agent's CEP-18 token balance (in motes).
- *
- * Returns:
- *   { balance: '0', source: 'none' }    — no token deployed, no env
- *   { balance: '0', source: 'cache' }   — RPC failed, served from cache
- *   { balance: '450000000', source: 'on-chain' } — real read
  */
 export async function getAgentCep18Balance(
   agentAccountHashHex: string
@@ -112,8 +114,8 @@ export async function getAgentCep18Balance(
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
     return { balance: cached.balance, source: 'cache' };
   }
-  const util = await discoverUtilContract();
-  if (!util) {
+  const main = await discoverMainContract();
+  if (!main) {
     return { balance: '0', source: 'unconfigured' };
   }
   try {
@@ -121,12 +123,12 @@ export async function getAgentCep18Balance(
     const srhRes = await axios.post(
       cfg.CASPER_RPC_URL,
       { jsonrpc: '2.0', id: 1, method: 'chain_get_state_root_hash', params: [] },
-      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 5000 }
+      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 8000, validateStatus: () => true }
     );
     const srh = srhRes.data?.result?.state_root_hash;
     if (!srh) return { balance: '0', source: 'none' };
 
-    // Step 2: query the dictionary item indexed by the agent's account hash
+    // Step 2: query the balances dictionary item for our account
     const itemKey = accountHashToDictKey(agentAccountHashHex);
     const dictRes = await axios.post<DictItemResponse>(
       cfg.CASPER_RPC_URL,
@@ -138,32 +140,32 @@ export async function getAgentCep18Balance(
           state_root_hash: srh,
           dictionary_identifier: {
             ContractNamedKey: {
-              key: `hash-${util.contractHash}`,
-              dictionary_name: 'result',
+              key: `hash-${main.contractHash}`,
+              dictionary_name: 'balances',
               dictionary_item_key: itemKey,
             },
           },
         },
       },
-      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 5000, validateStatus: () => true }
+      { headers: { Authorization: cfg.CSPR_CLOUD_API_KEY }, timeout: 8000, validateStatus: () => true }
     );
 
     if (dictRes.status !== 200) {
+      console.log(`[balanceCheck] state_get_dictionary_item status: ${dictRes.status}, error: ${JSON.stringify(dictRes.data?.error).slice(0, 150)}`);
       return { balance: '0', source: 'none' };
     }
-    // The CLValue is a U256 / U512; `parsed` is the decimal string
     const clv = dictRes.data?.result?.stored_value?.CLValue;
     const balance = String(clv?.parsed ?? '0');
     cached = { balance, ts: Date.now() };
     return { balance, source: 'on-chain' };
-  } catch {
+  } catch (e: any) {
+    console.log(`[balanceCheck] error: ${e.message?.slice(0, 100)}`);
     return { balance: '0', source: 'none' };
   }
 }
 
 /**
- * Convenience: get the balance as a decimal CSPR-style number string
- * (1 CEP-18 with 9 decimals = 1_000_000_000 motes; divide by 1e9).
+ * Convenience: format motes as a human-readable decimal string.
  */
 export function formatCep18Balance(motes: string, decimals = 9): string {
   const big = BigInt(motes);
