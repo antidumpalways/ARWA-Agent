@@ -543,16 +543,28 @@ of IoT sources they watch.
 
 ### Production gaps, and what it would take to close them
 
-1. **Real CSPR.cloud x402 facilitator** — the server currently
-   uses an in-memory nonce store and a local allowlist. A
-   production deploy would route every settlement through
-   `x402-facilitator.cspr.cloud`. The client wrapper is already
-   implemented in `csprCloud/x402Facilitator.ts`.
-2. **Real CEP-18 token** — `token_in`/`token_out` are
-   `account-hash-000…0` in the demo. To run a real swap the
-   operator would deploy a CEP-18 contract (or use an existing
-   one like CSPR.trade's LP tokens) and set the package hash
-   in `.env`.
+1. **Real CSPR.cloud x402 facilitator** — *partially closed in
+   v0.5.0.* The server now forwards every accepted envelope to
+   `https://x402-facilitator.cspr.cloud/verify` then `/settle`
+   and returns the on-chain settle hash in the response. If the
+   facilitator is unreachable or returns 4xx (e.g. our test
+   wallet isn't in the buildathon allowlist yet), the response
+   transparently falls back to `mode: "local-fallback"` and
+   the agent still receives the forecast. Production only
+   needs sponsored facilitator access — the code path is in
+   place. See `scripts/x402Server.ts:forwardToFacilitator`.
+2. **Real CEP-18 token** — *partially closed in v0.5.0.* The
+   agent now has a `getAgentCep18Balance()` function
+   (`src/casper/balanceCheck.ts`) that reads the agent's own
+   CEP-18 balance via the `cep18_test_contract` utility helper
+   from `casper-ecosystem/cep18`. To activate: deploy
+   `cep18.wasm` + `cep18_test_contract.wasm` from that repo
+   via `casper-client put-transaction`, copy the two hashes
+   from NamedKeys (`cep18_token_contract`, `cep18_test_contract`)
+   into `.env` (`X402_CEP18_PACKAGE_HASH`, `CEP18_UTIL_QUERY_HASH`).
+   The Mentor confirmed: *"We don't have official CEP18
+   contract. This is open source and you can deploy it
+   with/without change on testnet."*
 3. **Persistence for nonces and forecasts** — the in-memory
    `Set` and event log would be replaced by Redis or SQLite.
 4. **TLS / reverse proxy** — the demo server binds to
@@ -564,6 +576,24 @@ of IoT sources they watch.
 6. **LLM with audit** — when `LLM_API_KEY` is set, decisions
    include the LLM prompt and response. For regulated
    industries this would be persisted to the decision log.
+
+### Mentor-confirmed status (2026-06-09)
+
+Sent to Casper dev mentors on Discord; the responses validated
+our architecture:
+
+* `Odra` custom structs in `RevenueEmitter` are unsupported by
+  the CSPR.cloud MCP auto-parser — **the `directContractRead.ts`
+  local-JSON-log cache is the correct workaround**, not a
+  fallback.
+* x402 facilitator requires `Authorization: <CSPR_CLOUD_API_KEY>`
+  on `/verify` and `/settle`. The buildathon grants *sponsored*
+  access to teams; our code already speaks the right protocol
+  and falls back gracefully while we wait for the allowlist.
+* No official CEP-18 contract exists; each team deploys their
+  own from `casper-ecosystem/cep18`. The 5-step deploy tutorial
+  in `MIGRATION_NOTES.md` walks through `make build-contract`
+  → `casper-client put-transaction` → `cspr.live` → `.env`.
 
 ---
 

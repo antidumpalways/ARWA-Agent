@@ -310,6 +310,97 @@ app.get('/health', (_, res) => {
   });
 });
 
+/**
+ * Forward the X-Payment envelope to the CSPR.cloud x402 facilitator
+ * for on-chain settlement. Two-step: verify first, then settle.
+ *
+ * Returns { ok, settleTxHash?, reason? }.
+ *
+ * When the facilitator is unreachable or returns 4xx (auth/allowlist),
+ * we fall back to local-verify mode: the in-memory EIP-712 + nonce +
+ * allowlist check in `verifyEip712Envelope` is the only thing that
+ * guaranteed acceptance. This keeps the demo runnable even without
+ * full facilitator access.
+ */
+async function forwardToFacilitator(
+  envelope: string,
+  cfg: ReturnType<typeof loadConfig>
+): Promise<{ ok: boolean; mode: 'facilitator' | 'local-fallback'; settleTxHash?: string; reason?: string }> {
+  const parts = envelope.split(':');
+  const [network, payee, amount, signature, nonce, validUntil, payer] = parts;
+
+  if (!cfg.X402_FACILITATOR_URL) {
+    return { ok: false, mode: 'local-fallback', reason: 'X402_FACILITATOR_URL not set' };
+  }
+
+  // CAIP-2 format the facilitator expects
+  const caip2Network =
+    cfg.CASPER_NETWORK === 'casper' ? 'casper:casper' : 'casper:casper-test';
+
+  const verifyBody = {
+    network: caip2Network,
+    payee,
+    amount,
+    asset: ASSET,
+    nonce,
+    validUntil: Number(validUntil),
+    payer,
+    signature,
+  };
+
+  try {
+    const verifyRes = await fetch(`${cfg.X402_FACILITATOR_URL}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: cfg.CSPR_CLOUD_API_KEY,
+      },
+      body: JSON.stringify(verifyBody),
+      // Short timeout — facilitator is optional in this demo
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!verifyRes.ok) {
+      const text = await verifyRes.text();
+      return {
+        ok: false,
+        mode: 'local-fallback',
+        reason: `facilitator /verify ${verifyRes.status}: ${text.slice(0, 120)}`,
+      };
+    }
+
+    // Verify passed → ask facilitator to settle on-chain
+    const settleRes = await fetch(`${cfg.X402_FACILITATOR_URL}/settle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: cfg.CSPR_CLOUD_API_KEY,
+      },
+      body: JSON.stringify(verifyBody),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!settleRes.ok) {
+      const text = await settleRes.text();
+      return {
+        ok: false,
+        mode: 'local-fallback',
+        reason: `facilitator /settle ${settleRes.status}: ${text.slice(0, 120)}`,
+      };
+    }
+
+    const settleData = (await settleRes.json()) as { deployHash?: string; txHash?: string };
+    const settleTxHash = settleData.deployHash ?? settleData.txHash;
+    return { ok: true, mode: 'facilitator', settleTxHash };
+  } catch (e: any) {
+    return {
+      ok: false,
+      mode: 'local-fallback',
+      reason: `facilitator unreachable: ${e?.message?.slice(0, 120) ?? String(e).slice(0, 120)}`,
+    };
+  }
+}
+
 app.get('/signal', async (req, res) => {
   if (!X402_DEMO_ENABLED) {
     return res.status(503).json({ error: 'service disabled' });
@@ -328,11 +419,31 @@ app.get('/signal', async (req, res) => {
     return paymentRequired(res, v.reason);
   }
 
-  console.log(
-    `[x402-server] ✓ accepted from ${v.payer?.slice(0, 12)}… for lot=${lot}`
-  );
+  // Local EIP-712 verify passed. Now try to forward to the real
+  // CSPR.cloud x402 facilitator for on-chain settlement. If the
+  // facilitator is unreachable or returns 4xx, fall back to local-only
+  // (the demo still works, just without the on-chain settle tx).
+  const cfg = loadConfig();
+  const settle = await forwardToFacilitator(payment, cfg);
+
+  if (settle.ok) {
+    console.log(
+      `[x402-server] ✓ settled via facilitator tx=${settle.settleTxHash?.slice(0, 16)}…`
+    );
+  } else {
+    console.log(`[x402-server] ℹ facilitator skipped: ${settle.reason}`);
+  }
+
   const forecast = await computeForecast(lot);
-  res.json(forecast);
+  res.json({
+    ...forecast,
+    settlement: {
+      mode: settle.mode,
+      settle_tx_hash: settle.settleTxHash ?? null,
+      facilitator: cfg.X402_FACILITATOR_URL,
+      reason: settle.reason ?? null,
+    },
+  });
 });
 
 if (!X402_DEMO_ENABLED) {

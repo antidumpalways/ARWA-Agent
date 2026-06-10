@@ -8,13 +8,29 @@ import { runAnalyst } from './analyst';
 import { runExecutor } from './executor';
 import { loadConfig } from './config';
 import { RevenueEvent } from './types';
+import { getAgentCep18Balance, formatCep18Balance } from './casper/balanceCheck';
+import { getAgentKeys } from './casper/signer';
 
 export async function runCycle(input: {
   revenueEvent: RevenueEvent;
   ownerAddress: string;
-}): Promise<{ proposal: any; execution: any }> {
+}): Promise<{ proposal: any; execution: any; tokenBalance?: { balance: string; source: string; display: string } }> {
   const cfg = loadConfig();
   console.log('[cycle] start');
+
+  // Read the agent's CEP-18 token balance (if a CEP-18 is configured).
+  // Best-effort: if no token deployed or RPC fails, we still run the cycle.
+  let tokenBalance: { balance: string; source: string; display: string } | undefined;
+  try {
+    const { publicKey } = getAgentKeys();
+    const accountHash = publicKey.accountHash().toHex();
+    const r = await getAgentCep18Balance(accountHash);
+    const display = r.balance === '0' ? '0' : formatCep18Balance(r.balance, 9);
+    tokenBalance = { balance: r.balance, source: r.source, display };
+    console.log(`[cycle] CEP-18 balance: ${display} (${r.source})`);
+  } catch (e: any) {
+    console.log(`[cycle] CEP-18 balance check skipped: ${e.message?.slice(0, 60)}`);
+  }
 
   const proposal = await runAnalyst({
     revenueEvent: input.revenueEvent,
@@ -25,12 +41,12 @@ export async function runCycle(input: {
 
   if (proposal.confidence < 50) {
     console.log('[cycle] low confidence, skipping execution');
-    return { proposal, execution: null };
+    return { proposal, execution: null, tokenBalance };
   }
 
   const execution = await runExecutor(proposal);
   console.log('[cycle] done');
-  return { proposal, execution };
+  return { proposal, execution, tokenBalance };
 }
 
 if (require.main === module) {

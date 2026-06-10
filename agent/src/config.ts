@@ -31,6 +31,7 @@ const EnvSchema = z.object({
   X402_SIGNAL_ENDPOINT: z.string().url().default('https://signals.parkflow.example.com/utilization'),
   X402_CEP18_PACKAGE_HASH: z.string().optional(),
   X402_CEP18_ASSET_NAME: z.string().default('USDC').optional(),
+  CEP18_UTIL_QUERY_HASH: z.string().optional(),
 
   // Server
   PORT: z.coerce.number().int().positive().default(4000),
