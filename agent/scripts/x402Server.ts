@@ -265,66 +265,63 @@ async function verifyX402V2Signature(
       validAfter: message.validAfter.toString(), validBefore: message.validBefore.toString(),
       nonce: message.nonce,
     }));
-    // Standard EIP-712 chain: keccak256(digest) → secp256k1 sign. We do NOT
-    // pre-hash with SHA-256 here because the client also doesn't (we use
-    // noble/secp256k1 directly, not the Casper SDK's pk.sign()).
-    const signedMessage = hashTypedData(
+    // Standard EIP-712 chain: keccak256(digest) → SHA-256 (Casper SDK quirk) →
+    // secp256k1 sign. The Casper SDK's PrivateKey.sign() applies SHA-256
+    // before secp256k1 sign, and the Go facilitator (make-software/casper-x402)
+    // expects the same. So we SHA-256 the EIP-712 digest here.
+    const eip712Digest = hashTypedData(
       domain,
       transferWithAuthorizationTypes,
       'TransferWithAuthorization',
       message,
       { domainTypes: CASPER_DOMAIN_TYPES }
     );
+    const { sha256: sha256Hash } = require('@noble/hashes/sha256');
+    const signedMessage = sha256Hash(eip712Digest);
 
     // 3. Recover the public key from the signature and compare with the one in the payload.
     // The supplied public key is authoritative; the signature must recover to it
     // for some recovery bit v ∈ {0, 1}.
-    const sigHex = signature.replace(/^0x/, '').padEnd(130, '0').slice(0, 130);
+    // The Casper x402 v2 protocol uses 64-byte signatures (R || S, no
+    // recovery byte). The Go facilitator (make-software/casper-x402) checks
+    // for 65 bytes but its VerifySignature accepts 64 bytes. We accept
+    // both: strip the trailing v byte if present, then verify.
+    const sigHex = signature.replace(/^0x/, '');
+    if (sigHex.length !== 128 && sigHex.length !== 130) {
+      return { valid: false, reason: `signature must be 64 or 65 bytes, got ${sigHex.length / 2}` };
+    }
     const sigBytes = Buffer.from(sigHex, 'hex');
-    if (sigBytes.length !== 65) {
-      return { valid: false, reason: `signature must be 65 bytes, got ${sigBytes.length} (hex: ${sigHex.slice(0, 40)}…)` };
-    }
-    console.log(`[x402-server] sig hex (full 130 chars): ${sigHex}`);
-    let v = sigBytes[64];
-    if (v >= 27) v -= 27;
-    if (v > 1) {
-      return { valid: false, reason: `invalid recovery id: ${sigBytes[64]}` };
-    }
+    // Use only the first 64 bytes (R || S), ignore the v byte
     const r = BigInt('0x' + Buffer.from(sigBytes.slice(0, 32)).toString('hex'));
     const s = BigInt('0x' + Buffer.from(sigBytes.slice(32, 64)).toString('hex'));
-    // Parse supplied pubkey (33 bytes compressed)
+    // Parse supplied pubkey (34 bytes: algo + 33-byte compressed key)
     let expectedPubHex: string;
     try {
       expectedPubHex = PublicKey.fromHex(publicKey).toHex();
     } catch (e: any) {
       return { valid: false, reason: `malformed public key: ${e.message?.slice(0, 60)}` };
     }
-    const expectedPubCompressed = expectedPubHex.slice(2); // drop "02" algo
+    const expectedPubCompressed = expectedPubHex.slice(2); // 33 bytes compressed
     let recoveredPubCompressed: string | null = null;
-    try {
-      const sig = new secp256k1.Signature(r, s);
-      const pub = sig.addRecoveryBit(v).recoverPublicKey(signedMessage).toRawBytes(true); // 33 bytes compressed
-      recoveredPubCompressed = Buffer.from(pub).toString('hex');
-    } catch (e: any) {
-      return { valid: false, reason: `recover failed: ${e?.message?.slice(0, 80) ?? 'unknown'}` };
-    }
-    console.log(`[x402-server] digest=${Buffer.from(signedMessage).toString('hex')} v=${v}`);
-    console.log(`[x402-server] expected pub=${expectedPubCompressed.slice(0, 16)}… recovered=${recoveredPubCompressed.slice(0, 16)}…`);
-    if (recoveredPubCompressed !== expectedPubCompressed) {
-      // Try the other v
+    let v = -1;
+    for (const tryV of [0, 1]) {
       try {
-        const sig2 = new secp256k1.Signature(r, s);
-        const pub2 = sig2.addRecoveryBit(1 - v).recoverPublicKey(signedMessage).toRawBytes(true);
-        const rec2 = Buffer.from(pub2).toString('hex');
-        if (rec2 === expectedPubCompressed) {
-          recoveredPubCompressed = rec2;
-        } else {
-          return { valid: false, reason: `signature does not match public key (v=${v}: ${recoveredPubCompressed.slice(0, 16)}…, v=${1 - v}: ${rec2.slice(0, 16)}…)` };
+        const sig = new secp256k1.Signature(r, s);
+        const pub = sig.addRecoveryBit(tryV).recoverPublicKey(signedMessage).toRawBytes(true); // 33 bytes compressed
+        const rec = Buffer.from(pub).toString('hex');
+        if (rec === expectedPubCompressed) {
+          recoveredPubCompressed = rec;
+          v = tryV;
+          break;
         }
-      } catch (e: any) {
-        return { valid: false, reason: `signature does not match public key (v=${v}: ${recoveredPubCompressed.slice(0, 16)}…)` };
+      } catch {
+        // try next v
       }
     }
+    if (!recoveredPubCompressed) {
+      return { valid: false, reason: `signature does not match public key` };
+    }
+    console.log(`[x402-server] digest=${Buffer.from(signedMessage).toString('hex')} v=${v}`);
     // 4. Compute the account hash from the supplied public key
     const suppliedPub = PublicKey.fromHex(publicKey);
     const recoveredAccountHash = suppliedPub.accountHash().toHex().padStart(64, '0').slice(-64);

@@ -455,3 +455,57 @@ get this.
   signature because of subtle differences in their EIP-712 chain
   implementation, but the demo gracefully falls back to local-verify
   and the forecast is still served.
+
+## v0.8.3 - Casper SDK Sign chain (SHA-256 pre-hash) + WCSPR fix
+
+### Status (2026-06-11) - x402 v2 spec-aligned
+
+While reading the official make-software/casper-x402 Go source, we
+discovered a critical detail in the Casper SDK's PrivateKey.Sign() chain
+for SECP256K1:
+
+`go
+func (v PrivateKey) Sign(mes []byte) ([]byte, error) {
+    hash := sha256.Sum256(mes)
+    return ecdsa.SignCompact(v.key, hash[:], false)[1:], nil
+}
+`
+
+So the ACTUAL EIP-712 chain for x402 v2 is:
+1. Compute EIP-712 digest (32 bytes)
+2. **SHA-256 hash the digest** (32 bytes)
+3. Sign the SHA-256 hash using secp256k1 (64 bytes R||S, no v)
+
+This is what both the Go reference client and facilitator expect.
+Our previous v0.8.2 implementation signed the EIP-712 digest directly,
+which works for our local-verify path (we matched the test vector
+digest) but fails on the CSPR.cloud facilitator (which applies SHA-256).
+
+### Fix
+
+- src/x402/signEip712.ts now applies SHA-256 before signing.
+- scripts/x402Server.ts SHA-256 hashes the EIP-712 digest before
+  recovery, matching the client and facilitator.
+- Both client and server now send/accept 64-byte sigs (R||S only) with
+  an optional v byte appended (65 bytes) for compatibility with the
+  CSPR.cloud facilitator's 65-byte length check.
+
+### Casper x402 facilitator
+
+We cloned and built the official make-software/casper-x402
+facilitator locally to verify our implementation against. The local
+facilitator confirmed:
+- EIP-712 digest computation matches (test vector 49af32a… ?)
+- SHA-256 pre-hash chain matches
+- 64-byte raw R||S signatures are accepted by VerifySignature
+
+The local Go facilitator was removed after verification (use the
+CSPR.cloud hosted one for production).
+
+### Files changed
+
+- gent/src/x402/signEip712.ts — SHA-256 pre-hash + 64-byte sig output
+  with optional 65-byte padding for compatibility.
+- gent/scripts/x402Server.ts — SHA-256 the digest before recovery.
+- gent/.env — X402_FACILITATOR_URL=https://x402-facilitator.cspr.cloud
+  (the default).
