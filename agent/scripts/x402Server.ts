@@ -26,9 +26,10 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import {
   hashTypedData,
-  TransferAuthorizationTypes,
   buildDomain,
+  CASPER_DOMAIN_TYPES,
 } from '@casper-ecosystem/casper-eip-712';
+import type { TypeDefinitions } from '@casper-ecosystem/casper-eip-712';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { PublicKey } from 'casper-js-sdk';
 import { loadConfig } from '../src/config';
@@ -209,25 +210,70 @@ async function verifyX402V2Signature(
     const domain = buildDomain(
       meta.name, // must match what the client received in PAYMENT-REQUIRED extra.name
       meta.version,
-      paymentRequirements.network,
+      paymentRequirements.network.replace(/^casper:/, ''), // "casper-test", not "casper:casper-test"
       paymentRequirements.asset.padStart(64, '0').slice(-64)
     );
+    // The Go reference client (make-software/casper-x402) uses a CUSTOM type def:
+    //   `TransferWithAuthorization` (capital W) with `from`/`to` as `address`
+    //   (33-byte hex), `validAfter`/`validBefore` as `uint256`, and `nonce` as
+    //   `bytes32`. The auth fields in the wire format use the prefixed
+    //   AccountHash; in the EIP-712 message the prefixed value is the `from`
+    //   public key and the prefixed value is the `to` account hash.
+    const transferWithAuthorizationTypes: TypeDefinitions = {
+      TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
+      ],
+    };
+    // The Go client/facilitator use the PUBKEY-FORM address for the EIP-712
+    // message's `from` field (algo + 32-byte x-coord for SECP256K1). We
+    // derive it from the supplied `publicKey` in the payload. The wire-format
+    // `authorization.from` uses the account-hash form (`00` + 32-byte hash).
+    // For `to`, the payee is always specified by account hash (33-byte).
+    const suppliedPubObj = PublicKey.fromHex(publicKey); // algo + 33-byte compressed = 34 bytes
+    // The Go test vector uses algo + 32-byte x-coord (33 bytes) for SECP256K1.
+    // For casper-js-sdk: pub.toHex() returns algo + 33-byte compressed (34
+    // bytes). We need to use the UNCOMPRESSED pubkey to get 04 + x(32) +
+    // y(32) = 65 bytes, then take algo + x(32) = 33 bytes.
+    const suppliedPubHex = suppliedPubObj.toHex();
+    const algo = suppliedPubHex.substring(0, 2);  // "02" for SECP256K1
+    // Get the 32-byte x-coord: decompress using noble/secp256k1.
+    // The compressed key is in suppliedPubHex bytes 1-33. We need to
+    // extract the x-coord (first 32 bytes of the uncompressed form, i.e.
+    // bytes 1-32 of the 65-byte uncompressed key, which corresponds to the
+    // first 32 bytes of the compressed key after the parity byte).
+    const compressedKeyBytes = Buffer.from(suppliedPubHex.substring(2), 'hex'); // 33 bytes
+    // For Noble/secp256k1, we use secp256k1.ProjectivePoint.fromHex to
+    // decompress; then take the x-coord (first 32 bytes of uncompressed).
+    const uncompressed = secp256k1.ProjectivePoint.fromHex(compressedKeyBytes).toRawBytes(false);
+    const xCoord = Buffer.from(uncompressed).slice(1, 33); // 32 bytes
+    const signerPub33 = algo + xCoord.toString('hex'); // 33 bytes (algo + 32 x-coord)
     const message = {
-      from: auth.from.replace(/^00/, '').padStart(64, '0').slice(-64),
-      to: auth.to.replace(/^00/, '').padStart(64, '0').slice(-64),
+      from: signerPub33,                          // 33-byte pubkey (signer)
+      to: auth.to,                                // 33-byte account-hash (payee)
       value: BigInt(auth.value),
-      valid_after: BigInt(auth.validAfter),
-      valid_before: BigInt(auth.validBefore),
+      validAfter: BigInt(auth.validAfter),
+      validBefore: BigInt(auth.validBefore),
       nonce: auth.nonce.padStart(64, '0').slice(-64),
     };
+    console.log(`[x402-server] EIP-712 message:`, JSON.stringify({
+      from: message.from, to: message.to, value: message.value.toString(),
+      validAfter: message.validAfter.toString(), validBefore: message.validBefore.toString(),
+      nonce: message.nonce,
+    }));
     // Standard EIP-712 chain: keccak256(digest) → secp256k1 sign. We do NOT
     // pre-hash with SHA-256 here because the client also doesn't (we use
     // noble/secp256k1 directly, not the Casper SDK's pk.sign()).
     const signedMessage = hashTypedData(
       domain,
-      TransferAuthorizationTypes,
-      'TransferAuthorization',
-      message
+      transferWithAuthorizationTypes,
+      'TransferWithAuthorization',
+      message,
+      { domainTypes: CASPER_DOMAIN_TYPES }
     );
 
     // 3. Recover the public key from the signature and compare with the one in the payload.
@@ -238,6 +284,7 @@ async function verifyX402V2Signature(
     if (sigBytes.length !== 65) {
       return { valid: false, reason: `signature must be 65 bytes, got ${sigBytes.length} (hex: ${sigHex.slice(0, 40)}…)` };
     }
+    console.log(`[x402-server] sig hex (full 130 chars): ${sigHex}`);
     let v = sigBytes[64];
     if (v >= 27) v -= 27;
     if (v > 1) {
@@ -261,6 +308,7 @@ async function verifyX402V2Signature(
     } catch (e: any) {
       return { valid: false, reason: `recover failed: ${e?.message?.slice(0, 80) ?? 'unknown'}` };
     }
+    console.log(`[x402-server] digest=${Buffer.from(signedMessage).toString('hex')} v=${v}`);
     console.log(`[x402-server] expected pub=${expectedPubCompressed.slice(0, 16)}… recovered=${recoveredPubCompressed.slice(0, 16)}…`);
     if (recoveredPubCompressed !== expectedPubCompressed) {
       // Try the other v

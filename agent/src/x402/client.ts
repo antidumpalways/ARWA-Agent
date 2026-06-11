@@ -32,13 +32,36 @@ import {
   hashTypedData,
   TransferAuthorizationTypes,
   buildDomain,
+  CASPER_DOMAIN_TYPES,
   toHex,
 } from '@casper-ecosystem/casper-eip-712';
 import { PrivateKey, KeyAlgorithm, PublicKey } from 'casper-js-sdk';
+import { secp256k1 } from '@noble/curves/secp256k1';
 import { loadConfig } from '../config';
 import { X402Proof } from '../types';
 import { getAgentKeys } from '../casper/signer';
 import { signEip712Digest } from './signEip712';
+import type { TypeDefinitions } from '@casper-ecosystem/casper-eip-712';
+
+/**
+ * Build the 33-byte Casper EIP-712 address from a PublicKey.
+ * For SECP256K1: `0x02` + 32-byte x-coord of the pubkey (decompressed).
+ * For ED25519:   `0x01` + 32-byte pubkey.
+ * Matches the Go `eip712.NewAddressFromHex` Address type (33 bytes).
+ */
+function buildCasperAddressFromPublicKey(pub: PublicKey, priv: PrivateKey): string {
+  const algo = pub.cryptoAlg; // KeyAlgorithm.ED25519=1, SECP256K1=2
+  if (algo === KeyAlgorithm.ED25519) {
+    // 0x01 + 32-byte ED25519 pubkey
+    const pubBytes = Buffer.from(pub.bytes());
+    return '01' + pubBytes.toString('hex');
+  }
+  // SECP256K1: decompress and take the x-coord (32 bytes)
+  const privBytes = priv.toBytes();
+  const uncompressed = secp256k1.getPublicKey(privBytes, false); // 65 bytes: 04 || x || y
+  const xCoord = Buffer.from(uncompressed).slice(1, 33);
+  return '02' + xCoord.toString('hex');
+}
 
 export interface PaymentRequirementsV2 {
   scheme: 'exact';
@@ -136,11 +159,18 @@ export async function payAndFetchViaX402<T = any>(
 
   // 3) build EIP-712 typed data
   // Make sure AGENT_PUBLIC_KEY is populated (getAgentKeys() reads PEM and caches it)
-  const { publicKey: agentPubKey } = getAgentKeys();
-  // Account hash is 32 raw bytes; the "00" prefix in x402 wire format is a Casper
-  // Key tag (Key::Account) that EIP-712 hashTypedData does NOT want.
+  const { publicKey: agentPubKey, privateKey: agentPrivKey } = getAgentKeys();
+  // The Go reference client (make-software/casper-x402) uses a 33-byte address:
+  //   1-byte algo tag + 32-byte key.
+  // For SECP256K1: algo=0x02 + 32-byte x-coord of the pubkey (NOT the 33-byte
+  // compressed form with parity byte). For ED25519: algo=0x01 + 32-byte pubkey.
+  // The wire format (PAYMENT-REQUIRED.authorization.from) uses the AccountHash
+  // with "00" prefix (33 bytes), but the EIP-712 message uses the pubkey-form
+  // address (33 bytes with algo tag).
   const agentAccountHashBytes32 = agentPubKey.accountHash().toHex().padStart(64, '0').slice(-64);
   const agentAccountHashV2 = '00' + agentAccountHashBytes32; // for wire format
+  // Build the 33-byte pubkey address for the EIP-712 message:
+  const agentPub33 = buildCasperAddressFromPublicKey(agentPubKey, agentPrivKey);
 
   // Strip any prefix from server-supplied payTo and asset
   const payToBytes32 = (reqs.payTo ?? '').replace(/^account-hash-/, '').replace(/^00/, '').padStart(64, '0').slice(-64);
@@ -151,11 +181,14 @@ export async function payAndFetchViaX402<T = any>(
   // Use the server's `extra` (name, version) to build the EIP-712 domain
   const domainName = reqs.extra?.name ?? 'Caspar x402';
   const domainVersion = reqs.extra?.version ?? '1';
+  // Network format: Go client uses "casper-test" (no "casper:" CAIP-2 prefix)
+  // in the EIP-712 domain. The wire format uses "casper:casper-test".
+  const networkForDomain = reqs.network.replace(/^casper:/, '');
 
   const domain = buildDomain(
     domainName,
     domainVersion,
-    reqs.network,
+    networkForDomain,
     assetBytes32
   );
   const now = Math.floor(Date.now() / 1000);
@@ -164,27 +197,62 @@ export async function payAndFetchViaX402<T = any>(
   const nonce = crypto.getRandomValues(new Uint8Array(32));
   const nonceHex = Buffer.from(nonce).toString('hex');
 
-  // EIP-712 message uses raw 32-byte AccountHash (no "00" tag)
+  // EIP-712 message (per make-software/casper-x402 spec):
+  //   - `from` and `to` are the 33-byte public keys (with algo prefix) — `address` type
+  //   - `validAfter`/`validBefore` are uint256 (not uint64)
+  //   - `nonce` is bytes32
+  //   - `value` is uint256
+  // Field names use camelCase (not snake_case). Integer values must be `bigint`
+  // for the TS lib to encode them as uint256 correctly.
   const message = {
-    from: agentAccountHashBytes32,
-    to: payToBytes32,
-    value: BigInt(reqs.amount),
-    valid_after: BigInt(validAfter),
-    valid_before: BigInt(validBefore),
-    nonce: nonceHex,
+    // The Go client/facilitator use the PUBKEY-FORM address for the EIP-712
+    // message's `from` field (algo + 32-byte x-coord for SECP256K1, or
+    // algo + 32-byte pubkey for ED25519). The wire format
+    // `authorization.from` uses the account-hash form (`00` + 32-byte hash).
+    // Both are 33 bytes but differ in the first byte.
+    from: agentPub33,              // 33-byte pubkey-form address (1 algo + 32 key)
+    to: payToV2,                  // 33-byte "00" + 32-byte account hash (payee)
+    value: BigInt(reqs.amount),   // bigint
+    validAfter: BigInt(validAfter),
+    validBefore: BigInt(validBefore),
+    nonce: nonceHex,              // bytes32 = 64 hex chars
   };
+  console.log(`[x402-client] domain:`, JSON.stringify({
+    name: domain.name, version: domain.version, chain_name: domain.chain_name,
+    contract_package_hash: domain.contract_package_hash,
+  }));
+  console.log(`[x402-client] EIP-712 message:`, JSON.stringify({
+    from: message.from, to: message.to, value: message.value.toString(),
+    validAfter: message.validAfter.toString(), validBefore: message.validBefore.toString(),
+    nonce: message.nonce,
+  }));
 
   // 4) hash the typed data → 32-byte keccak256 digest.
-  //    We sign the EIP-712 digest directly (standard EIP-712 chain: keccak256
-  //    → secp256k1). The Casper SDK's PrivateKey.sign() auto-pre-hashes with
-  //    SHA-256, but we use noble/secp256k1 directly in signEip712Digest, so
-  //    we have full control. Standard EIP-712 matches the CSPR.cloud x402
-  //    facilitator's expected signing chain.
+  //    The official make-software/casper-x402 facilitator (Go) uses a CUSTOM
+  //    type definition with these fields:
+  //      TransferWithAuthorization { from, to, value, validAfter, validBefore, nonce }
+  //    Field types differ from the casper-eip-712 TS lib's TransferAuthorization:
+  //      - `from`/`to` are `address` (33 bytes with algo tag, not 32-byte bytes32)
+  //      - `validAfter`/`validBefore` are `uint256` (not `uint64`)
+  //      - field names are camelCase (not snake_case)
+  //      - primary type is `"TransferWithAuthorization"` (capital W)
+  //    See: https://github.com/make-software/casper-x402/blob/master/x402/mechanisms/casper/exact/client/scheme.go
+  const transferWithAuthorizationTypes: TypeDefinitions = {
+    TransferWithAuthorization: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'validAfter', type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce', type: 'bytes32' },
+    ],
+  };
   const digest = hashTypedData(
     domain,
-    TransferAuthorizationTypes,
-    'TransferAuthorization',
-    message
+    transferWithAuthorizationTypes,
+    'TransferWithAuthorization',
+    message,
+    { domainTypes: CASPER_DOMAIN_TYPES }
   );
   const signingInput = digest;
 
