@@ -1,19 +1,30 @@
 /**
- * x402 client for Casper.
+ * x402 v2 client for Casper.
  *
- * Flow (against CSPR.cloud x402 facilitator):
+ * Flow (against any x402 v2 server):
  *   1. GET <paid-endpoint>
- *   2. Server returns 402 + headers: X-Payment-Address, X-Payment-Amount,
- *      X-Payment-Network, X-Payment-Asset, X-Payment-Nonce, X-Payment-ValidUntil
- *   3. Build the Casper-native EIP-712 typed data (TransferAuthorization)
- *   4. Hash the typed data via @casper-ecosystem/casper-eip-712
- *   5. Sign the hash with the agent's PrivateKey (casper-js-sdk v5)
- *   6. Build the `X-Payment` header with the signature
- *   7. Replay the request with the header
- *   8. Server forwards to CSPR.cloud facilitator for settlement
+ *   2. Server returns 402 + header PAYMENT-REQUIRED = base64(json PaymentRequirements)
+ *   3. Decode base64 → parse requirements (scheme, network, payTo, asset, amount, extra)
+ *   4. Build EIP-712 typed data TransferAuthorization matching server's `extra`
+ *   5. Hash via @casper-ecosystem/casper-eip-712
+ *   6. Sign with the agent's PrivateKey (casper-js-sdk v5)
+ *   7. Build PaymentPayload and base64-encode → PAYMENT-SIGNATURE header
+ *   8. Replay with the header
+ *   9. Server validates, forwards to CSPR.cloud x402 facilitator for on-chain settle
  *
- * Facilitator docs: https://docs.cspr.cloud/x402-facilitator-api/
- * Signing spec:     https://github.com/casper-ecosystem/casper-eip-712
+ * x402 v2 spec:
+ *   - account hash format: "00" + 64 hex chars
+ *   - public key format: "01" or "02" + 64/66 hex chars (algorithm prefix)
+ *   - signature: 65 bytes EIP-712 (130 hex chars)
+ *   - nonce: 32 bytes (64 hex chars)
+ *   - network: "casper:casper" or "casper:casper-test" (CAIP-2)
+ *   - asset: 64-char hex (CEP-18 contract package hash, no "hash-" prefix)
+ *   - x402Version: 2
+ *   - scheme: "exact"
+ *
+ * Refs:
+ *   https://docs.cspr.cloud/x402-facilitator-api/reference
+ *   https://docs.cspr.cloud/x402-facilitator-api/verify
  */
 import axios, { AxiosResponse } from 'axios';
 import { readFileSync } from 'fs';
@@ -22,22 +33,44 @@ import {
   TransferAuthorizationTypes,
   buildDomain,
   toHex,
-  fromHex,
 } from '@casper-ecosystem/casper-eip-712';
-import { PrivateKey, KeyAlgorithm, PublicKey, AccountHash } from 'casper-js-sdk';
+import { PrivateKey, KeyAlgorithm, PublicKey } from 'casper-js-sdk';
 import { loadConfig } from '../config';
 import { X402Proof } from '../types';
-import { buildPaymentHeaderEnvelope } from './header';
-export { buildPaymentHeaderEnvelope, parsePaymentHeader } from './header';
+import { getAgentKeys } from '../casper/signer';
+import { signEip712Digest } from './signEip712';
 
-export interface PaymentRequirements {
-  address: string;        // 0x... hex (account hash)
-  amount: string;         // motes (or token units)
-  network: string;        // e.g. "casper" or "casper-test"
-  asset: string;          // CEP-18 contract package hash
-  nonce: string;
-  validUntil: number;     // unix seconds
+export interface PaymentRequirementsV2 {
   scheme: 'exact';
+  network: string;            // "casper:casper-test"
+  payTo: string;              // "00" + 64 hex chars
+  amount: string;             // decimal string of base units
+  asset: string;              // 64-char hex (no "hash-" prefix)
+  maxTimeoutSeconds: number;
+  extra?: {
+    name?: string;
+    version?: string;
+    decimals?: string;
+    symbol?: string;
+  };
+}
+
+export interface PaymentPayloadV2 {
+  x402Version: 2;
+  resource: { url: string };
+  accepted: PaymentRequirementsV2;
+  payload: {
+    signature: string;        // 130 hex chars
+    publicKey: string;        // with algo prefix
+    authorization: {
+      from: string;           // "00" + 64 hex
+      to: string;             // "00" + 64 hex
+      value: string;          // decimal string
+      validAfter: string;     // unix seconds
+      validBefore: string;    // unix seconds
+      nonce: string;          // 64 hex chars
+    };
+  };
 }
 
 export interface X402Response<T = any> {
@@ -46,8 +79,21 @@ export interface X402Response<T = any> {
   raw: AxiosResponse;
 }
 
+function parsePaymentRequiredHeader(b64: string): PaymentRequirementsV2 | null {
+  try {
+    const json = Buffer.from(b64, 'base64').toString('utf-8');
+    return JSON.parse(json) as PaymentRequirementsV2;
+  } catch {
+    return null;
+  }
+}
+
+function encodePaymentPayload(payload: PaymentPayloadV2): string {
+  return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64');
+}
+
 /**
- * Attempt to fetch a paid resource. Handles 402 detection, EIP-712 signing,
+ * Attempt to fetch a paid resource. Handles 402 detection, EIP-712 v2 signing,
  * and proof extraction. If the endpoint doesn't return 402, returns the data
  * with a null proof (free endpoint).
  */
@@ -76,83 +122,118 @@ export async function payAndFetchViaX402<T = any>(
     return { data: initial.data as T, proof: null as any, raw: initial };
   }
 
-  // 2) parse 402 headers
-  const reqs = parsePaymentRequirements(initial.headers);
+  // 2) parse 402 headers (x402 v2: PAYMENT-REQUIRED = base64 json)
+  const headerB64 =
+    (initial.headers['payment-required'] as string | undefined) ??
+    (initial.headers['PAYMENT-REQUIRED'] as string | undefined);
+  let reqs = headerB64 ? parsePaymentRequiredHeader(headerB64) : null;
   if (!reqs) {
-    throw new Error('402 returned but no parseable PaymentRequirements headers');
+    throw new Error('402 returned but no parseable PAYMENT-REQUIRED header');
   }
-  if (options.paymentAmountOverride) reqs.amount = options.paymentAmountOverride;
+  if (options.paymentAmountOverride) {
+    reqs = { ...reqs, amount: options.paymentAmountOverride };
+  }
 
-  // 3) build domain + message. `TransferAuthorization` expects `from`/`to`/
-  //    `nonce` as **bytes32** (32 raw bytes, no prefix), so we use the agent's
-  //    AccountHash (32 bytes), not the PublicKey (33 bytes with algo tag).
-  const agentAccountHash = cfg.AGENT_PUBLIC_KEY
-    ? PublicKey.fromHex(cfg.AGENT_PUBLIC_KEY).accountHash().toHex().replace(/^account-hash-/, '')
-    : '0'.repeat(64);
-  // The `to` field is whatever the server told us (`address` may be prefixed).
-  // Strip the prefix so we have raw 32 bytes.
-  const toBare = (reqs.address ?? '').replace(/^account-hash-/, '').replace(/^hash-/, '');
-  const assetBare = (reqs.asset ?? '').replace(/^account-hash-/, '').replace(/^hash-/, '');
-  // Pad/truncate to exactly 32 bytes for `bytes32`.
-  const toBytes32 = toBare.padEnd(64, '0').slice(-64);
-  const assetBytes32 = assetBare.padEnd(64, '0').slice(-64);
+  // 3) build EIP-712 typed data
+  // Make sure AGENT_PUBLIC_KEY is populated (getAgentKeys() reads PEM and caches it)
+  const { publicKey: agentPubKey } = getAgentKeys();
+  // Account hash is 32 raw bytes; the "00" prefix in x402 wire format is a Casper
+  // Key tag (Key::Account) that EIP-712 hashTypedData does NOT want.
+  const agentAccountHashBytes32 = agentPubKey.accountHash().toHex().padStart(64, '0').slice(-64);
+  const agentAccountHashV2 = '00' + agentAccountHashBytes32; // for wire format
+
+  // Strip any prefix from server-supplied payTo and asset
+  const payToBytes32 = (reqs.payTo ?? '').replace(/^account-hash-/, '').replace(/^00/, '').padStart(64, '0').slice(-64);
+  const payToV2 = '00' + payToBytes32; // for wire format
+  const assetBare = (reqs.asset ?? '').replace(/^hash-/, '');
+  const assetBytes32 = assetBare.padStart(64, '0').slice(-64);
+
+  // Use the server's `extra` (name, version) to build the EIP-712 domain
+  const domainName = reqs.extra?.name ?? 'Caspar x402';
+  const domainVersion = reqs.extra?.version ?? '1';
 
   const domain = buildDomain(
-    'Caspar x402',
-    '1',
-    cfg.CASPER_NETWORK === 'casper' ? 'casper' : 'casper-test',
+    domainName,
+    domainVersion,
+    reqs.network,
     assetBytes32
   );
+  const now = Math.floor(Date.now() / 1000);
+  const validAfter = now - 5; // 5s clock-skew tolerance
+  const validBefore = now + (reqs.maxTimeoutSeconds ?? 600);
+  const nonce = crypto.getRandomValues(new Uint8Array(32));
+  const nonceHex = Buffer.from(nonce).toString('hex');
+
+  // EIP-712 message uses raw 32-byte AccountHash (no "00" tag)
   const message = {
-    from: agentAccountHash,
-    to: toBytes32,
+    from: agentAccountHashBytes32,
+    to: payToBytes32,
     value: BigInt(reqs.amount),
-    valid_after: 0n,
-    valid_before: BigInt(reqs.validUntil),
-    nonce: reqs.nonce.padEnd(64, '0').slice(-64),
+    valid_after: BigInt(validAfter),
+    valid_before: BigInt(validBefore),
+    nonce: nonceHex,
   };
 
-  // 4) hash the typed data
+  // 4) hash the typed data → 32-byte keccak256 digest.
+  //    The Casper SDK's PrivateKey.sign() pre-hashes the input with SHA-256,
+  //    so the EIP-712 signing chain is effectively keccak256 → sha256 → secp256k1.
+  //    We need to mirror this on the server side, so we compute the SHA-256
+  //    pre-hash here and pass THAT to signEip712Digest.
   const digest = hashTypedData(
     domain,
     TransferAuthorizationTypes,
     'TransferAuthorization',
     message
   );
+  const sha256 = (await import('@noble/hashes/sha256')).sha256;
+  const signingInput = sha256(digest);
 
-  // 5) sign with our private key
+  // 5) sign with our private key — produce 65-byte sig (r||s||v) using Noble
+  //    (Casper's PrivateKey.sign() returns only 64 raw bytes without recovery)
   const pem = readFileSync(pkPath, 'utf-8');
   let privateKey: PrivateKey;
+  let algo: KeyAlgorithm;
   try {
-    privateKey = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
-  } catch {
     privateKey = PrivateKey.fromPem(pem, KeyAlgorithm.SECP256K1);
+    algo = KeyAlgorithm.SECP256K1;
+  } catch {
+    privateKey = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
+    algo = KeyAlgorithm.ED25519;
   }
-  const sigBytes = privateKey.sign(digest);
-  const signature = toHex(sigBytes);
+  if (algo !== KeyAlgorithm.SECP256K1) {
+    throw new Error('x402 v2 on Casper currently requires a SECP256K1 key');
+  }
+  const privBytes = privateKey.toBytes(); // 32 raw bytes
+  const sigBytes = signEip712Digest(signingInput, privBytes, agentPubKey.toHex());
+  // x402 v2 expects a 130-char hex string (no "0x" prefix).
+  const signature = Buffer.from(sigBytes).toString('hex');
 
-  // 6) build the X-Payment header. The Casper x402 facilitator expects a
-  //    colon-delimited envelope — see https://github.com/make-software/casper-x402.
-  // Read the payer fresh from process.env (cfg snapshot may be stale — keys
-  // are loaded lazily by getAgentKeys and AGENT_PUBLIC_KEY is filled in after
-  // loadConfig() runs).
-  const payer = process.env.AGENT_PUBLIC_KEY ?? cfg.AGENT_PUBLIC_KEY ?? '';
-  const paymentHeader = buildPaymentHeaderEnvelope({
-    network: cfg.CASPER_NETWORK,
-    payee: reqs.address,
-    amount: reqs.amount,
-    signature,
-    nonce: reqs.nonce,
-    validUntil: reqs.validUntil,
-    payer,
-  });
+  // 6) build the v2 payment payload
+  const payload: PaymentPayloadV2 = {
+    x402Version: 2,
+    resource: { url: endpoint },
+    accepted: reqs,
+    payload: {
+      signature,
+      publicKey: agentPubKey.toHex(),
+      authorization: {
+        from: agentAccountHashV2,
+        to: payToV2,
+        value: reqs.amount,
+        validAfter: String(validAfter),
+        validBefore: String(validBefore),
+        nonce: nonceHex,
+      },
+    },
+  };
+  const paymentHeader = encodePaymentPayload(payload);
 
   // 7) retry with proof
   const final = await axios.request({
     method,
     url: endpoint,
     data: options.body,
-    headers: { 'X-Payment': paymentHeader },
+    headers: { 'PAYMENT-SIGNATURE': paymentHeader },
     validateStatus: () => true,
     timeout: 15_000,
   });
@@ -162,45 +243,26 @@ export async function payAndFetchViaX402<T = any>(
     );
   }
 
-  // 8) extract settle deploy hash from response header
-  const settleTxHash =
-    (final.headers['x-payment-settle'] as string | undefined) ?? '';
+  // 8) extract settle deploy hash from response header (x402 v2: PAYMENT-RESPONSE)
+  const responseB64 = (final.headers['payment-response'] as string | undefined) ?? '';
+  let settleTxHash = '';
+  if (responseB64) {
+    try {
+      const r = JSON.parse(Buffer.from(responseB64, 'base64').toString('utf-8'));
+      settleTxHash = r.transaction ?? r.deployHash ?? r.txHash ?? '';
+    } catch {}
+  }
 
   const proof: X402Proof = {
     paymentHeader,
     settleTxHash,
     facilitator: cfg.X402_FACILITATOR_URL,
     amountMotes: reqs.amount,
-    asset: reqs.asset,
-    signedAt: Math.floor(Date.now() / 1000),
+    asset: 'hash-' + assetBytes32,
+    signedAt: now,
   };
 
   return { data: final.data as T, proof, raw: final };
 }
 
-function parsePaymentRequirementsInternal(
-  headers: Record<string, any>
-): PaymentRequirements | null {
-  const address = headers['x-payment-address'];
-  const amount = headers['x-payment-amount'];
-  const network = headers['x-payment-network'] ?? 'casper';
-  const asset = headers['x-payment-asset'];
-  const nonce = headers['x-payment-nonce'];
-  const validUntil = headers['x-payment-valid-until'];
-  if (!address || !amount || !asset || !nonce) return null;
-  return {
-    address: String(address),
-    amount: String(amount),
-    network: String(network),
-    asset: String(asset),
-    nonce: String(nonce),
-    validUntil: Number(validUntil ?? Math.floor(Date.now() / 1000) + 600),
-    scheme: 'exact',
-  };
-}
-
-/** Exported for tests. Same logic as the internal call. */
-export const parsePaymentRequirements = parsePaymentRequirementsInternal;
-
-// Suppress unused import warning when `fromHex` is not directly referenced
-void fromHex;
+export const parsePaymentRequirements = parsePaymentRequiredHeader;
