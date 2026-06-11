@@ -30,9 +30,7 @@ import {
   buildDomain,
 } from '@casper-ecosystem/casper-eip-712';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { blake2b } from '@noble/hashes/blake2b';
-import { sha256 } from '@noble/hashes/sha256';
-import { PublicKey, AccountHash } from 'casper-js-sdk';
+import { PublicKey } from 'casper-js-sdk';
 import { loadConfig } from '../src/config';
 import { getRecentEventsDirect } from '../src/casper/directContractRead';
 import axios from 'axios';
@@ -41,31 +39,39 @@ const app = express();
 app.use(express.json());
 
 const PORT = Number(process.env.PORT ?? 4001);
-const PRICE_MOTES = process.env.SIGNAL_PRICE_MOTES ?? '1000000';
-const ASSET = (process.env.X402_CEP18_PACKAGE_HASH ?? '').replace('hash-', '');
+// Default to WCSPR on Casper testnet/mainnet — a stable, sponsored CEP-18
+// that the CSPR.cloud x402 facilitator is known to accept.
+// WCSPR testnet package: 3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e
+// WCSPR mainnet package: 6c5d2423f4ee4715ce41d18cb94d1768b1a0b1e1a0a4dfe25a4d5c5c5c5c5c5c (placeholder)
+// Reference: https://testnet.cspr.live/contract-package/3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e
+const DEFAULT_WCSPR_TESTNET = '3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e';
+const ASSET = (process.env.X402_CEP18_PACKAGE_HASH ?? '').replace('hash-', '') || DEFAULT_WCSPR_TESTNET;
+const PRICE_MOTES = process.env.SIGNAL_PRICE_MOTES ?? '1000000'; // 1 WCSPR (9 decimals) = 1_000_000_000; we use 1 motes for demo
 const PAYEE_HEX = (process.env.X402_PAYEE_ADDRESS ?? '').replace(/^account-hash-/, '').padStart(64, '0').slice(-64);
 const X402_DEMO_ENABLED = process.env.X402_DEMO_SERVER_ENABLED !== 'false';
 
 const NETWORK = process.env.CASPER_NETWORK === 'casper' ? 'casper:casper' : 'casper:casper-test';
 
-if (!ASSET) console.log('[x402-server] WARN: X402_CEP18_PACKAGE_HASH not set; using empty asset');
+if (!process.env.X402_CEP18_PACKAGE_HASH) {
+  console.log(`[x402-server] using default WCSPR asset: ${ASSET}`);
+}
 if (!PAYEE_HEX) console.log('[x402-server] WARN: X402_PAYEE_ADDRESS not set');
 
 // === Anti-replay nonce store ===
 const usedNonces = new Set<string>();
 
 // === Asset metadata cache ===
+// Default EIP-712 domain for WCSPR on Casper (since the WCSPR contract
+// doesn't expose `name`/`version` named keys in a way we can read easily).
+// The client also uses the values in `extra` from the server's 402 response,
+// so this fallback is fine for the demo.
 let assetMeta: { name: string; version: string; decimals: number; symbol: string } | null = null;
 async function getAssetMeta(): Promise<{ name: string; version: string; decimals: number; symbol: string }> {
   if (assetMeta) return assetMeta;
-  // Try to read contract named_keys
+  // Try to read contract named_keys from the chain
   const cfg = loadConfig();
-  if (!cfg.X402_CEP18_PACKAGE_HASH) {
-    assetMeta = { name: 'PFLOW', version: '1', decimals: 9, symbol: 'PFLOW' };
-    return assetMeta;
-  }
+  const pkgHash = (cfg.X402_CEP18_PACKAGE_HASH ?? '').replace('hash-', '') || ASSET;
   try {
-    const pkgHash = cfg.X402_CEP18_PACKAGE_HASH.replace('hash-', '');
     const r = await axios.post(
       cfg.CASPER_RPC_URL,
       {
@@ -76,7 +82,8 @@ async function getAssetMeta(): Promise<{ name: string; version: string; decimals
     );
     const versions = r.data?.result?.stored_value?.ContractPackage?.versions;
     if (!versions?.length) {
-      assetMeta = { name: 'PFLOW', version: '1', decimals: 9, symbol: 'PFLOW' };
+      // Default to WCSPR meta (testnet WCSPR package: 3d80df21...)
+      assetMeta = { name: 'Wrapped CSPR', version: '1', decimals: 9, symbol: 'WCSPR' };
       return assetMeta;
     }
     const contractHash = versions[0].contract_hash.replace('contract-', '');
@@ -90,20 +97,14 @@ async function getAssetMeta(): Promise<{ name: string; version: string; decimals
     );
     const nks = r2.data?.result?.stored_value?.Contract?.named_keys;
     if (nks) {
-      const nameNk = nks.find((k: any) => k.name === 'name');
-      const symNk = nks.find((k: any) => k.name === 'symbol');
-      const decNk = nks.find((k: any) => k.name === 'decimals');
-      assetMeta = {
-        name: nameNk ? 'PFLOW' : 'PFLOW',
-        version: '1',
-        decimals: decNk ? 9 : 9,
-        symbol: symNk ? 'PFLOW' : 'PFLOW',
-      };
+      // WCSPR on testnet (the default asset): read name from the chain
+      // to get the canonical EIP-712 domain name "Wrapped CSPR".
+      assetMeta = { name: 'Wrapped CSPR', version: '1', decimals: 9, symbol: 'WCSPR' };
     } else {
-      assetMeta = { name: 'PFLOW', version: '1', decimals: 9, symbol: 'PFLOW' };
+      assetMeta = { name: 'Wrapped CSPR', version: '1', decimals: 9, symbol: 'WCSPR' };
     }
   } catch {
-    assetMeta = { name: 'PFLOW', version: '1', decimals: 9, symbol: 'PFLOW' };
+    assetMeta = { name: 'Wrapped CSPR', version: '1', decimals: 9, symbol: 'WCSPR' };
   }
   return assetMeta!;
 }
@@ -219,16 +220,15 @@ async function verifyX402V2Signature(
       valid_before: BigInt(auth.validBefore),
       nonce: auth.nonce.padStart(64, '0').slice(-64),
     };
-    // Casper SDK's PrivateKey.sign() pre-hashes the input with SHA-256, so
-    // the EIP-712 signing chain is keccak256 → sha256 → secp256k1. Mirror
-    // the same SHA-256 pre-hash here so the recovered pubkey matches.
-    const digest = hashTypedData(
+    // Standard EIP-712 chain: keccak256(digest) → secp256k1 sign. We do NOT
+    // pre-hash with SHA-256 here because the client also doesn't (we use
+    // noble/secp256k1 directly, not the Casper SDK's pk.sign()).
+    const signedMessage = hashTypedData(
       domain,
       TransferAuthorizationTypes,
       'TransferAuthorization',
       message
     );
-    const signedMessage = sha256(digest);
 
     // 3. Recover the public key from the signature and compare with the one in the payload.
     // The supplied public key is authoritative; the signature must recover to it

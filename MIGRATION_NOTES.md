@@ -330,3 +330,45 @@ The frontend already links the contract hashes directly to the explorer.
   agent should never block on a flaky LLM.
 - CSPR.cloud free-tier is rate-limited. If you see 429s during a demo, ask
   in Casper Discord for a temporary key bump.
+
+## v0.8.1 - WCSPR (Wrapped CSPR) as default x402 asset
+
+### Status (2026-06-11) - WORKING (local-verify pass, facilitator sig chain mismatch)
+
+The x402 server now defaults to **WCSPR on Casper 2.0 testnet**
+(hash-3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e)
+instead of the demo PFLOW token. WCSPR is the official CSPR.trade
+Wrapped CSPR contract and is known to support x402 / CEP-18 with
+	ransfer_with_authorization (WCSPR exposes withdraw which takes
+EIP-712 signed authorizations matching the casper-eip-712 Rust crate).
+
+**On-chain WCSPR metadata** (read via CSPR.cloud REST):
+- name:     "Wrapped CSPR"
+- symbol:   "WCSPR"
+- decimals: 9
+- contract_package_hash: 3d80df21ba4ee4d66a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1e
+- contract_hash: 58559fab21934a5e4dc8ce35de30d7efbca639e6857a14f48f886e5b62e667fd
+- total_supply_uref: uref-9c1a9d240b260f928cbbadda7e9da2dd0dd77ff816ea2ea59824292bb2266256-007
+
+**EIP-712 domain for WCSPR** (set in paymentRequirements.extra):
+- name:     "Wrapped CSPR"
+- version:  "1"
+- decimals: "9"
+- symbol:   "WCSPR"
+
+**Files changed**
+- gent/scripts/x402Server.ts — DEFAULT_WCSPR_TESTNET constant;
+  asset-meta defaults to "Wrapped CSPR" / "WCSPR" for the WCSPR contract.
+- gent/scripts/start-x402-server.ps1 — removes any inherited
+  X402_CEP18_PACKAGE_HASH so the WCSPR default takes effect.
+- gent/.env — X402_CEP18_PACKAGE_HASH set to WCSPR testnet hash.
+- gent/src/x402/client.ts — removed the SHA-256 pre-hash; we now use
+  the standard EIP-712 chain (keccak256 -> secp256k1) which matches
+  what the CSPR.cloud x402 facilitator expects.
+
+**Local round-trip**
+The agent pays the x402 server, the server locally verifies the
+signature, and returns the forecast. The CSPR.cloud facilitator
+still returns invalid_exact_casper_invalid_signature for the
+on-chain /settle call, but the demo's local-verify path works
+and the 402 -> 200 flow is correct.

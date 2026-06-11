@@ -23,9 +23,9 @@ import { readFileSync } from 'fs';
   // 1) Pre-check: agent has PFLOW
   console.log('\n--- Pre-check PFLOW balance ---');
   const totalSupply = await getCep18TotalSupply();
-  const balance = await getAgentCep18Balance();
-  console.log('Total supply (raw):', totalSupply);
-  console.log('Agent balance (raw):', balance);
+  const balance = await getAgentCep18Balance(getAgentKeys().publicKey.accountHash().toHex());
+  console.log('Total supply:', totalSupply);
+  console.log('Agent balance:', balance);
 
   // 2) Make the paid request
   console.log('\n--- x402 paid request ---');
@@ -42,8 +42,8 @@ import { readFileSync } from 'fs';
 
     // 3) Post-check
     console.log('\n--- Post-check PFLOW balance ---');
-    const balance2 = await getAgentCep18Balance();
-    console.log('Agent balance (raw):', balance2);
+    const balance2 = await getAgentCep18Balance(getAgentKeys().publicKey.accountHash().toHex());
+    console.log('Agent balance:', balance2);
   } catch (e: any) {
     console.error('FAIL:', e.message?.slice(0, 400));
     process.exit(1);

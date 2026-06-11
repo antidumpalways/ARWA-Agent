@@ -175,18 +175,18 @@ export async function payAndFetchViaX402<T = any>(
   };
 
   // 4) hash the typed data → 32-byte keccak256 digest.
-  //    The Casper SDK's PrivateKey.sign() pre-hashes the input with SHA-256,
-  //    so the EIP-712 signing chain is effectively keccak256 → sha256 → secp256k1.
-  //    We need to mirror this on the server side, so we compute the SHA-256
-  //    pre-hash here and pass THAT to signEip712Digest.
+  //    We sign the EIP-712 digest directly (standard EIP-712 chain: keccak256
+  //    → secp256k1). The Casper SDK's PrivateKey.sign() auto-pre-hashes with
+  //    SHA-256, but we use noble/secp256k1 directly in signEip712Digest, so
+  //    we have full control. Standard EIP-712 matches the CSPR.cloud x402
+  //    facilitator's expected signing chain.
   const digest = hashTypedData(
     domain,
     TransferAuthorizationTypes,
     'TransferAuthorization',
     message
   );
-  const sha256 = (await import('@noble/hashes/sha256')).sha256;
-  const signingInput = sha256(digest);
+  const signingInput = digest;
 
   // 5) sign with our private key — produce 65-byte sig (r||s||v) using Noble
   //    (Casper's PrivateKey.sign() returns only 64 raw bytes without recovery)
