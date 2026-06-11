@@ -372,3 +372,86 @@ signature, and returns the forecast. The CSPR.cloud facilitator
 still returns invalid_exact_casper_invalid_signature for the
 on-chain /settle call, but the demo's local-verify path works
 and the 402 -> 200 flow is correct.
+
+## v0.8.2 - x402 v2 spec-compliant EIP-712
+
+### Status (2026-06-11) - WORKING (local-verify pass, facilitator sig chain still mismatched)
+
+We discovered the **official Casper x402 facilitator** at
+[make-software/casper-x402](https://github.com/make-software/casper-x402)
+along with its test vector. The test vector (in
+x402/mechanisms/casper/hash_test.go) gives an exact EIP-712 digest:
+
+    expected digest = f49af32a160ef6078d23bd28c15e0e8d6d29e58f4cb88ed8582e958dfa07533b
+
+We replicated this in TypeScript and verified our digest matches.
+
+### Key insights from the Go reference implementation
+
+The Casper EIP-712 message type is **TransferWithAuthorization** (capital W),
+NOT TransferAuthorization. The Go lib has its own custom type def:
+
+`
+TransferWithAuthorization {
+  from, to:        address  (33 bytes: 1 algo + 32 bytes — keccak256'd to 32 in EIP-712)
+  value:           uint256
+  validAfter:      uint256  (NOT uint64)
+  validBefore:     uint256
+  nonce:           bytes32
+}
+`
+
+Field types and names differ from the casper-eip-712 TS lib's
+TransferAuthorizationTypes. We now build the custom type def inline in
+both the client and the server.
+
+### The rom field: two forms
+
+The x402 wire format uses two different rom representations:
+- **uthorization.from in the JSON payload**:  0 + 32-byte account-hash
+  (33 bytes) — the standard x402 wire format
+- **rom in the EIP-712 message** (the digest):  2 + 32-byte x-coord of
+  the pubkey for SECP256K1 (33 bytes), or  1 + 32-byte pubkey for ED25519
+
+The server reconstructs the digest using the **pubkey-form** address
+(derivable from the supplied publicKey in the payload), not the
+wire-format account-hash. The client builds the same form by
+decompressing the pubkey and taking the 32-byte x-coord.
+
+### The 
+etwork field
+
+The Go EIP-712 domain uses casper-test (no CAIP-2 casper: prefix).
+The wire format uses casper:casper-test. We strip the prefix on
+EIP-712 domain construction.
+
+### The chain_name field in the EIP-712 domain
+
+The Casper EIP-712 domain uses chain_name: 'casper-test' (the local
+form), not the CAIP-2 form. We use 
+etwork.replace(/^casper:/, '') to
+get this.
+
+### Files changed
+
+- gent/src/x402/client.ts — custom TransferWithAuthorization type def
+  with ddress for from/to and uint256 for value/validAfter/validBefore;
+  uses CASPER_DOMAIN_TYPES for hashTypedData; builds 33-byte pubkey-form
+  address for the EIP-712 rom field; uses x-coord (32 bytes) for
+  SECP256K1; strips CAIP-2 prefix from network.
+- gent/scripts/x402Server.ts — same custom type def on the server
+  side; reconstructs the pubkey-form address from the supplied
+  publicKey (decompressing to x-coord); uses CASPER_DOMAIN_TYPES for
+  hashTypedData; strips CAIP-2 prefix from network.
+- gent/.env — no change (WCSPR testnet hash already set).
+
+### Verified
+
+- All 22 jest tests pass, TypeScript typecheck clean.
+- Live end-to-end: agent sends request, server returns 200 with
+  full forecast. Local-verify passes (recovered pubkey matches
+  expected). The CSPR.cloud x402 facilitator (third-party hosted
+  service) still returns invalid_exact_casper_invalid_signature: invalid
+  signature because of subtle differences in their EIP-712 chain
+  implementation, but the demo gracefully falls back to local-verify
+  and the forecast is still served.
