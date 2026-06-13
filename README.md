@@ -131,13 +131,13 @@ flowchart TB
         LLM[decideStrategyWithLLM<br/>or heuristic]
         MCP[mcp/casperMcp<br/>mcp/csprTradeMcp]
         X402[x402/client<br/>EIP-712 sign]
-        SGN[casper/signer<br/>casper-js-sdk v5]
-        VLT[casper/vaultClient]
+        SGN[casper/signer<br/>TransactionV1 via SDK]
+        VLT[casper/vaultClient<br/>ContractCallBuilder]
     end
 
     subgraph "Off-Chain Services"
         CCD[CSPR.cloud<br/>REST + Streaming + MCP]
-        CTR[CSPR.trade<br/>MCP]
+        CTR[CSPR.trade MCP<br/>self-hosted :3001]
         SIG[x402 Signal Server<br/>:4001]
     end
 
@@ -184,22 +184,23 @@ graph LR
         TS6[types.ts]
     end
     subgraph "agent/src/casper/"
-        TS7[signer.ts<br/>casper-js-sdk v5]
-        TS8[vaultClient.ts<br/>logStrategyToVault]
+        TS7[signer.ts<br/>TransactionV1 sign+submit]
+        TS8[vaultClient.ts<br/>logStrategyToVault via ContractCallBuilder]
+        TS19[transactionV1.ts<br/>TransactionV1 builder]
     end
     subgraph "agent/src/csprCloud/"
-        TS9[rest.ts<br/>x402-facilitator raw auth]
+        TS9[rest.ts<br/>CSPR.cloud REST raw auth]
         TS10[streaming.ts<br/>SSE events]
         TS11[cesEvents.ts]
         TS12[x402Facilitator.ts]
     end
     subgraph "agent/src/mcp/"
         TS13[casperMcp.ts]
-        TS14[csprTradeMcp.ts]
+        TS14[csprTradeMcp.ts<br/>build_swap + submit]
     end
     subgraph "agent/src/x402/"
         TS15[client.ts<br/>payAndFetchViaX402]
-        TS16[header.ts<br/>envelope helpers]
+        TS16[signEip712.ts<br/>SECP256K1 sign via @noble/curves]
     end
     subgraph "agent/src/agent/"
         TS17[llmStrategy.ts]
@@ -209,7 +210,8 @@ graph LR
         SC1[deploy.ts]
         SC2[x402Server.ts]
         SC3[verify-setup.ts]
-        SC4[quickstart.ts]
+        SC4[setup.ts<br/>auto deploy + register]
+        SC5[simulate-parking-revenue.ts]
     end
     TS1 --> TS2
     TS1 --> TS3
@@ -264,10 +266,11 @@ parkflow-agent/
 │   │   │   └── csprTradeMcp.ts  CSPR.trade MCP (quotes, portfolio)
 │   │   ├── x402/
 │   │   │   ├── client.ts        payAndFetchViaX402 (EIP-712 sign)
-│   │   │   └── header.ts        X-Payment envelope helpers
+│   │   │   └── signEip712.ts    SECP256K1 sign via @noble/curves
 │   │   ├── casper/
-│   │   │   ├── signer.ts        casper-js-sdk v5 (Key, Deploy, RPC)
-│   │   │   └── vaultClient.ts   AgentVault logStrategyToVault
+│   │   │   ├── signer.ts        TransactionV1 sign+submit via RPC
+│   │   │   ├── vaultClient.ts   ContractCallBuilder → TransactionV1
+│   │   │   └── transactionV1.ts TransactionV1 builder utility
 │   │   ├── csprCloud/
 │   │   │   ├── rest.ts          CSPR.cloud REST (raw token auth)
 │   │   │   ├── streaming.ts     SSE: Contract-level events, Deploys
@@ -278,8 +281,10 @@ parkflow-agent/
 │   │       └── slippage.ts       BigInt slippage math
 │   ├── tests/                  21 jest tests across 5 suites
 │   ├── scripts/
-│   │   ├── deploy.ts           wasm build + deploy + env write
-│   │   ├── x402Server.ts       tiny demo signal provider
+│   │   ├── deploy.ts           contract build + deploy
+│   │   ├── setup.ts            one-command setup (deploy + register)
+│   │   ├── x402Server.ts       x402 signal provider
+│   │   ├── simulate-parking-revenue.ts  push test revenue events
 │   │   ├── verify-setup.ts     preflight checklist (22 checks)
 │   │   └── quickstart.ts       local checklist
 │   ├── dist/                   compiled JS (gitignored)
@@ -357,7 +362,7 @@ npx serve ../frontend
 In the frontend: connect CSPR.click, click **RUN OPTIMIZATION**, watch
 the SSE feed light up as the cycle progresses.
 
-### 5. Run one cycle from CLI
+### 4. Run one cycle from CLI
 
 ```bash
 cd agent
@@ -493,24 +498,24 @@ No contract change is needed. The same deployed
                     emit_revenue(…)  (same on-chain shape)
                                  │
                                  ▼
-                    ┌────────────────────────┐
-                    │  RevenueEmitter        │  (one contract,
-                    │  hash-1271…d            │   many issuers)
-                    └────────────┬───────────┘
-                                 │  events
-                                 ▼
-                    ┌────────────────────────┐
-                    │  ParkFlow Agent (Node) │  (one agent
-                    │  reads events           │   per operator)
-                    │  pays x402              │
-                    │  decides strategy       │
-                    └────────────┬───────────┘
-                                 │  execute_strategy
-                                 ▼
-                    ┌────────────────────────┐
-                    │  AgentVault            │  (one contract,
-                    │  hash-8c70…6b           │   shared audit log)
-                    └────────────────────────┘
+                     ┌────────────────────────┐
+                     │  RevenueEmitter        │  (one contract,
+                     │  hash-f7b8…2c          │   many issuers)
+                     └────────────┬───────────┘
+                                  │  events
+                                  ▼
+                     ┌────────────────────────┐
+                     │  ParkFlow Agent (Node) │  (one agent
+                     │  reads events           │   per operator)
+                     │  pays x402              │
+                     │  decides strategy       │
+                     └────────────┬───────────┘
+                                  │  execute_strategy
+                                  ▼
+                     ┌────────────────────────┐
+                     │  AgentVault            │  (one contract,
+                     │  hash-5ba7…a6           │   shared audit log)
+                     └────────────────────────┘
 ```
 
 **Horizontal scale**: one `RevenueEmitter` and one
@@ -712,10 +717,11 @@ All env vars live in `agent/.env`. The most important ones:
 | `CASPER_CHAIN_NAME`       | `casper-test` or `casper`                                               |
 | `AGENT_SECRET_KEY_PATH`   | Path to the agent's PEM key (default: `keys/agent.pem`)                 |
 | `AGENT_PUBLIC_KEY`        | Cached public key (auto-derived from PEM on first run)                  |
-| `REVENUE_EMITTER_CONTRACT_HASH` | Set by `npm run deploy`                                             |
-| `AGENT_VAULT_CONTRACT_HASH`     | Set by `npm run deploy`                                             |
+| `REVENUE_EMITTER_CONTRACT_HASH` | Set by `npm run setup`                                             |
+| `AGENT_VAULT_CONTRACT_HASH`     | Set by `npm run setup`                                             |
 | `X402_FACILITATOR_URL`    | x402 facilitator base URL (default: CSPR.cloud)                         |
 | `X402_SIGNAL_ENDPOINT`    | Signal provider URL (default: `http://localhost:4001/signal`)           |
+| `CSPR_TRADE_MCP_URL`      | CSPR.trade MCP endpoint (default: `http://localhost:3001/mcp`)         |
 | `X402_CEP18_PACKAGE_HASH` | The asset the x402 payment settles in                                  |
 | `LLM_API_KEY`             | Anthropic or OpenAI key. **Optional** — heuristic fallback if unset.     |
 | `LLM_PROVIDER`            | `anthropic` or `openai` (default: anthropic)                            |
@@ -751,31 +757,26 @@ npm test -- --no-coverage
 | `npm run build`                                | `tsc` → `dist/`                                                          |
 | `npm run typecheck`                            | `tsc --noEmit`                                                            |
 | `npm test`                                     | jest                                                                      |
+| `npm run setup`                                | One-command setup: deploy contracts + register agent                     |
 | `npm run dev`                                  | `tsx src/server.ts` (backend on :4000)                                   |
 | `npm run x402-server`                          | `tsx scripts/x402Server.ts` (signal on :4001)                            |
-| `npm run cycle`                                | `tsx src/index.ts` (one full cycle)                                       |
+| `npm run cycle`                                | `tsx src/index.ts` (one full cycle: x402 → analyst → swap → vault log)  |
 | `npm run analyst`                              | `tsx src/analyst.ts` (analyst CLI)                                       |
 | `npm run executor`                             | `tsx src/executor.ts` (executor CLI)                                     |
-| `npm run deploy`                               | `tsx scripts/deploy.ts` (build + install)                                |
-| `npm run deploy -- --skip-build`               | skip cargo build                                                         |
-| `npm run deploy -- --only=revenue_emitter`     | deploy only one contract                                                  |
-| `npm run simulate`                             | `tsx scripts/simulate-parking-revenue.ts` (push 5–10 revenue events)      |
-| `npm run simulate -- --count=10 --rate=0.15`   | custom count and CSPR/USD rate                                            |
+| `npm run deploy`                               | `tsx scripts/deploy.ts` (build + install contracts)                      |
 | `npm run verify`                               | `tsx scripts/verify-setup.ts` (22 preflight checks)                       |
-| `npm run quickstart`                           | `tsx scripts/quickstart.ts` (local checklist)                            |
+| `npm run simulate`                             | `tsx scripts/simulate-parking-revenue.ts` (push revenue events)           |
 
 ---
 
-## 🛠 User actions required (sandbox cannot do these)
+## 🛠 User actions required
 
 | Step                                       | Who | Notes                                                                                |
 |--------------------------------------------|-----|--------------------------------------------------------------------------------------|
-| Generate funded key                         | You | `casper-client keygen keys/agent.pem` + faucet ~1000 CSPR                          |
 | Get CSPR.cloud API key                      | You | <https://cspr.cloud> (free tier OK)                                                  |
-| `cargo odra build` & deploy                | You | `npm run deploy` (deploy.ts handles wasm-opt/wasm-strip fallback)                    |
-| Request a sponsored x402 facilitator        | You | ask in the Casper Discord during the buildathon                                    |
-| CSPR.click wallet install                   | You | <https://cspr.click> (for the demo UI)                                              |
-| Record demo video                           | You | capture one full `npm run cycle` against the live testnet                          |
+| Fund agent key (testnet CSPR)              | You | ~600 CSPR from faucet for contract deploy                                           |
+| Run `npm run setup`                         | You | Auto deploys contracts, registers agent, writes .env                                 |
+| Run `npm run cycle`                         | You | Full pipeline: x402 → analyst → swap → vault log                                    |
 
 ---
 
