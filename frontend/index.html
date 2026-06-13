@@ -5,24 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ParkFlow Agent — Casper Buildathon 2026</title>
   <style>
-    /* Casper brand fonts: Caspersans (headline) + Casper Sans (body).
-       Fall back to system-ui while waiting for the custom @font-face loads. */
-    @font-face {
-      font-family: 'Caspersans';
-      src: local('Caspersans'), local('Casper-Sans-Bold');
-      font-weight: 700;
-      font-display: swap;
-    }
-    @font-face {
-      font-family: 'Casper Sans';
-      src: local('Casper Sans'), local('Casper-Sans-Regular');
-      font-weight: 400 500;
-      font-display: swap;
-    }
+    @font-face { font-family: 'Caspersans'; src: local('Caspersans'), local('Casper-Sans-Bold'); font-weight: 700; font-display: swap; }
+    @font-face { font-family: 'Casper Sans'; src: local('Casper Sans'), local('Casper-Sans-Regular'); font-weight: 400 500; font-display: swap; }
     :root {
-      --color-primary: #B11F20;        /* Roof Terracotta */
-      --color-secondary: #DAD168;      /* Tacha */
-      --color-alert: #FF2D2D;          /* Red Orange */
+      --color-primary: #B11F20;
+      --color-secondary: #DAD168;
+      --color-alert: #FF2D2D;
       --color-bg: #FFFFFF;
       --color-surface: #FFFFFF;
       --color-text: #1A1A1A;
@@ -34,102 +22,91 @@
       --font-body: 'Casper Sans', 'Inter', system-ui, -apple-system, sans-serif;
     }
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0; padding: 0;
-      font-family: var(--font-body);
-      background: var(--color-bg-soft);
-      color: var(--color-text);
-      font-size: 14px;
-      line-height: 1.5;
-    }
+    html, body { margin: 0; padding: 0; font-family: var(--font-body); background: var(--color-bg); color: var(--color-text); font-size: 14px; line-height: 1.5; }
     h1, h2, h3, h4 { font-family: var(--font-headline); font-weight: 700; margin: 0; }
-    .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
-    .header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 0 24px;
-      border-bottom: 2px solid var(--color-primary);
-      margin-bottom: 24px;
+
+    /* ========== LANDING PAGE ========== */
+    #landing {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 40px 20px;
+      background: linear-gradient(180deg, #FAF7F2 0%, #FFFFFF 100%);
     }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-logo {
-      width: 44px; height: 44px;
+    #landing .hero-logo {
+      width: 120px; height: 120px;
       background: var(--color-primary);
       color: #FFFFFF;
       display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-headline); font-size: 24px; font-weight: 700;
-      border-radius: 12px;
+      font-family: var(--font-headline); font-size: 56px; font-weight: 700;
+      border-radius: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(177, 31, 32, 0.2);
     }
+    #landing h1 { font-size: 42px; line-height: 1.1; margin-bottom: 12px; }
+    #landing h1 span { color: var(--color-primary); }
+    #landing .subtitle { font-size: 18px; color: var(--color-text-muted); max-width: 600px; margin-bottom: 32px; }
+    #landing .features { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 800px; margin-bottom: 36px; }
+    #landing .feat {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: 14px; padding: 20px; width: 220px; text-align: left;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    #landing .feat .icon { font-size: 28px; margin-bottom: 8px; }
+    #landing .feat h3 { font-size: 15px; margin-bottom: 4px; }
+    #landing .feat p { font-size: 12px; color: var(--color-text-muted); margin: 0; }
+    #btn-enter {
+      padding: 16px 40px; border: none; cursor: pointer;
+      background: var(--color-primary); color: #FFFFFF;
+      font-family: var(--font-headline); font-weight: 700; font-size: 16px;
+      border-radius: 14px; transition: transform .15s, box-shadow .2s;
+      box-shadow: 0 4px 16px rgba(177, 31, 32, 0.25);
+    }
+    #btn-enter:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(177, 31, 32, 0.35); }
+    .badge-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
+    .badge-row span {
+      padding: 6px 14px; border-radius: 999px;
+      font-size: 12px; font-family: var(--font-headline);
+      background: var(--color-bg-soft); border: 1px solid var(--color-border);
+      color: var(--color-text-muted);
+    }
+    .badge-row .live { background: rgba(218,209,104,0.3); color: #4a4520; border-color: var(--color-secondary); }
+
+    /* ========== DASHBOARD ========== */
+    #dashboard { display: none; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 24px; border-bottom: 2px solid var(--color-primary); margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-logo { width: 44px; height: 44px; background: var(--color-primary); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: var(--font-headline); font-size: 24px; font-weight: 700; border-radius: 12px; }
     .brand-text h1 { font-size: 22px; line-height: 1; color: var(--color-text); }
     .brand-text p { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12px; }
     .header-actions { display: flex; align-items: center; gap: 12px; }
-    .pill {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 12px; border-radius: 999px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      font-size: 12px; color: var(--color-text-muted);
-    }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-border); font-size: 12px; color: var(--color-text-muted); }
     .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted); }
     .pill.live .dot { background: #16a34a; animation: pulse 2s infinite; }
     .pill.alert .dot { background: var(--color-alert); }
-    .btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 10px 18px; border: none; cursor: pointer;
-      background: var(--color-primary); color: #FFFFFF;
-      font-family: var(--font-headline); font-weight: 700; font-size: 13px;
-      border-radius: 10px;
-      transition: transform .1s, box-shadow .2s;
-    }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; cursor: pointer; background: var(--color-primary); color: #FFFFFF; font-family: var(--font-headline); font-weight: 700; font-size: 13px; border-radius: 10px; transition: transform .1s, box-shadow .2s; }
     .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(177, 31, 32, 0.2); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn-ghost { background: transparent; color: var(--color-primary); border: 1px solid var(--color-primary); }
     .grid { display: grid; gap: 16px; }
     .grid-3 { grid-template-columns: 1fr; }
     @media (min-width: 900px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
-    .card {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    }
-    .card h2 {
-      font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-      color: var(--color-text-muted);
-      margin-bottom: 12px;
-      display: flex; align-items: center; gap: 8px;
-    }
+    .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+    .card h2 { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .card h2 .badge { background: var(--color-secondary); color: var(--color-text); padding: 2px 8px; border-radius: 999px; font-size: 10px; }
-    .card .label { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px; }
-    .card .value { font-family: var(--font-headline); font-size: 28px; line-height: 1.1; margin: 4px 0; }
-    .card .sub { font-size: 12px; color: var(--color-text-muted); }
+    .label { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .value { font-family: var(--font-headline); font-size: 28px; line-height: 1.1; margin: 4px 0; }
+    .sub { font-size: 12px; color: var(--color-text-muted); }
     .kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
     .kpi { flex: 1 1 90px; background: var(--color-bg-soft); border-radius: 10px; padding: 10px; }
-    .kpi .label { font-size: 10px; }
     .kpi .value { font-size: 20px; }
-    /* Field card (parking lot) */
-    .gate-card {
-      background: linear-gradient(135deg, var(--color-bg-soft), #FFFFFF);
-      border: 1px dashed var(--color-border-strong);
-      border-radius: 12px;
-      padding: 16px;
-      margin: 12px 0;
-    }
+    .gate-card { background: linear-gradient(135deg, var(--color-bg-soft), #FFFFFF); border: 1px dashed var(--color-border-strong); border-radius: 12px; padding: 16px; margin: 12px 0; }
     .gate-row { display: flex; align-items: center; gap: 16px; }
-    .gate-icon {
-      width: 64px; height: 64px; flex: 0 0 64px;
-      background: var(--color-secondary);
-      color: var(--color-text);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 32px;
-      border-radius: 50%;
-      transition: transform .3s;
-    }
+    .gate-icon { width: 64px; height: 64px; flex: 0 0 64px; background: var(--color-secondary); color: var(--color-text); display: flex; align-items: center; justify-content: center; font-size: 32px; border-radius: 50%; transition: transform .3s; }
     .gate-icon.open { background: var(--color-primary); color: #FFFFFF; }
     .gate-icon.open::after { content: '↑'; }
     .gate-icon:not(.open)::after { content: '⛔'; }
     .gate-info { flex: 1; }
-    .gate-info .label { font-size: 10px; }
     .gate-info .value { font-size: 18px; margin: 2px 0; }
     .queue { margin-top: 12px; font-size: 12px; }
     .queue ul { list-style: none; padding: 0; margin: 0; }
@@ -137,51 +114,17 @@
     .queue li:last-child { border-bottom: none; }
     .queue .plat { font-family: monospace; font-weight: 500; }
     .queue .status { color: var(--color-text-muted); font-size: 11px; }
-    .tx-card {
-      background: var(--color-bg-soft);
-      border-radius: 10px;
-      padding: 12px;
-      margin-top: 12px;
-    }
+    .tx-card { background: var(--color-bg-soft); border-radius: 10px; padding: 12px; margin-top: 12px; }
     .tx-card .row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
-    .tx-card .row .label { color: var(--color-text-muted); }
-    .tx-card .row .value { font-family: monospace; }
     .tx-card .hash { font-family: monospace; font-size: 11px; color: var(--color-text-muted); word-break: break-all; }
-    /* AI thinking card */
-    .llm-bubble {
-      background: var(--color-secondary);
-      color: var(--color-text);
-      padding: 14px 16px;
-      border-radius: 14px 14px 14px 4px;
-      font-size: 13px;
-      line-height: 1.5;
-      margin-bottom: 12px;
-      font-style: italic;
-    }
+    .llm-bubble { background: var(--color-secondary); color: var(--color-text); padding: 14px 16px; border-radius: 14px 14px 14px 4px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; font-style: italic; }
     .llm-meta { display: flex; gap: 8px; flex-wrap: wrap; }
-    .llm-meta .item {
-      flex: 1 1 80px;
-      background: var(--color-bg-soft);
-      padding: 8px 10px;
-      border-radius: 8px;
-    }
-    .llm-meta .item .label { font-size: 10px; }
+    .llm-meta .item { flex: 1 1 80px; background: var(--color-bg-soft); padding: 8px 10px; border-radius: 8px; }
     .llm-meta .item .value { font-size: 14px; font-family: var(--font-headline); }
-    .x402-status {
-      display: flex; align-items: center; gap: 10px;
-      margin-top: 12px;
-      padding: 10px;
-      background: var(--color-bg-soft);
-      border-radius: 8px;
-    }
+    .x402-status { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; background: var(--color-bg-soft); border-radius: 8px; }
     .x402-status .icon { font-size: 18px; }
-    /* Chain card */
     .tx-list { margin-top: 8px; max-height: 200px; overflow-y: auto; }
-    .tx-list .row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 6px 0; border-bottom: 1px dotted var(--color-border);
-      font-size: 12px;
-    }
+    .tx-list .row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dotted var(--color-border); font-size: 12px; }
     .tx-list .row .left .action { font-weight: 600; }
     .tx-list .row .left .pair { color: var(--color-text-muted); font-size: 11px; }
     .tx-list .row .right { text-align: right; }
@@ -189,23 +132,56 @@
     .tx-list .row .outcome.success { background: rgba(218, 209, 104, 0.3); color: #4a4520; }
     .tx-list .row .outcome.reverted { background: rgba(255, 45, 45, 0.1); color: var(--color-alert); }
     .tx-list .row .hash { font-family: monospace; font-size: 10px; color: var(--color-text-muted); }
-    /* Section: action bar */
     .action-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
     .input { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 8px; font-family: var(--font-body); font-size: 13px; }
-    /* Footer */
-    .footer {
-      margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--color-border);
-      color: var(--color-text-muted); font-size: 11px; text-align: center;
-    }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 11px; text-align: center; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    /* Animations */
     @keyframes slideIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .tx-card, .llm-bubble, .gate-card { animation: slideIn .3s ease-out; }
+    #btn-back { background: transparent; border: none; cursor: pointer; color: var(--color-text-muted); font-size: 13px; padding: 6px 10px; border-radius: 8px; }
+    #btn-back:hover { background: var(--color-bg-soft); }
   </style>
 </head>
 <body>
+
+<!-- ==================== LANDING PAGE ==================== -->
+<div id="landing">
+  <div class="hero-logo">P</div>
+  <h1>ParkFlow <span>Agent</span></h1>
+  <p class="subtitle">
+    Autonomous RWA yield optimizer — converts real-world parking revenue 
+    into on-chain DeFi strategies on Casper Network, powered by AI.
+  </p>
+  <div class="badge-row">
+    <span class="live">Casper 2.0 Testnet</span>
+    <span>x402 Micropayments</span>
+    <span>Odra 2.7</span>
+    <span>CSPR.trade DEX</span>
+    <span>On-Chain Audit Trail</span>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <div class="icon">🚗</div>
+      <h3>Real-World Bridge</h3>
+      <p>Parking lot sensors → immutable on-chain revenue events via RevenueEmitter contract.</p>
+    </div>
+    <div class="feat">
+      <div class="icon">🧠</div>
+      <h3>AI-Powered Decisions</h3>
+      <p>LLM analyzes on-chain data + premium off-chain signals (paid via x402) to decide optimal DeFi strategy.</p>
+    </div>
+    <div class="feat">
+      <div class="icon">🔗</div>
+      <h3>Verifiable Reputation</h3>
+      <p>Every decision logged on-chain to AgentVault — full audit trail with cryptographic proof.</p>
+    </div>
+  </div>
+  <button id="btn-enter">▶ Launch Dashboard</button>
+</div>
+
+<!-- ==================== DASHBOARD ==================== -->
+<div id="dashboard">
   <div class="container">
-    <!-- Header -->
     <div class="header">
       <div class="brand">
         <div class="brand-logo">P</div>
@@ -215,79 +191,63 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-back">← Back</button>
         <div id="net-pill" class="pill"><div id="net-dot" class="dot"></div><span id="net-text">Checking…</span></div>
         <button id="btn-run" class="btn" disabled>▶ Run Cycle</button>
       </div>
     </div>
 
-    <!-- Input bar -->
     <div class="action-bar">
       <div>
-        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">Lot</div>
-        <input id="in-source" class="input" value="P1 - Gate Keluar Utama" />
+        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">Parking Lot</div>
+        <input id="in-source" class="input" value="P1 - Main Gate" />
       </div>
       <div>
-        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">USD per cycle</div>
+        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">USD / Cycle</div>
         <input id="in-amount-usd" class="input" type="number" value="20" step="1" style="width:90px" />
       </div>
       <div id="status-line" style="margin-left:auto;color:var(--color-text-muted);font-size:12px">Backend offline — start <code>npm run dev</code> in agent/</div>
     </div>
 
-    <!-- 3 cards: Lapangan / Kognitif / Blockchain -->
     <div class="grid grid-3">
 
-      <!-- ============================== -->
-      <!-- KARTU 1: SISI LAPANGAN (FISIK) -->
-      <!-- ============================== -->
+      <!-- Card 1: Physical World -->
       <div class="card">
-        <h2>① Sisi Lapangan <span class="badge">IoT Bridge</span></h2>
+        <h2>Physical World <span class="badge">IoT Bridge</span></h2>
         <div class="gate-card">
           <div class="gate-row">
             <div id="gate-icon" class="gate-icon"></div>
             <div class="gate-info">
-              <div class="label">Palang Pintu</div>
-              <div class="value" id="gate-state">Menunggu mobil…</div>
+              <div class="label">Parking Gate</div>
+              <div class="value" id="gate-state">Waiting for vehicle…</div>
               <div class="sub" id="gate-sub">No vehicles in last cycle</div>
             </div>
           </div>
         </div>
         <div class="queue">
-          <div class="label">Antrian (simulasi)</div>
+          <div class="label">Queue (Simulated)</div>
           <ul id="queue-list">
             <li><span class="plat">—</span><span class="status">no data</span></li>
           </ul>
         </div>
         <div class="tx-card" id="last-tx" style="display:none">
-          <div class="row"><span class="label">Mobil</span><span class="value" id="last-tx-plat">—</span></div>
-          <div class="row"><span class="label">Durasi</span><span class="value" id="last-tx-dur">—</span></div>
-          <div class="row"><span class="label">Biaya</span><span class="value" id="last-tx-cost">—</span></div>
+          <div class="row"><span class="label">Vehicle</span><span class="value" id="last-tx-plat">—</span></div>
+          <div class="row"><span class="label">Duration</span><span class="value" id="last-tx-dur">—</span></div>
+          <div class="row"><span class="label">Fee</span><span class="value" id="last-tx-cost">—</span></div>
           <div class="row"><span class="label">On-chain</span><span class="value" id="last-tx-motes">—</span></div>
-          <div class="row" style="margin-top:6px"><span class="label">Receipt hash</span></div>
+          <div class="row" style="margin-top:6px"><span class="label">Receipt Hash</span></div>
           <div class="hash" id="last-tx-hash">—</div>
         </div>
       </div>
 
-      <!-- ============================== -->
-      <!-- KARTU 2: SISI KOGNITIF (AI)    -->
-      <!-- ============================== -->
+      <!-- Card 2: AI Brain -->
       <div class="card">
-        <h2>② Sisi AI <span class="badge">LLM + x402</span></h2>
-        <div class="llm-bubble" id="llm-rationale">
-          "Menunggu siklus…"
-        </div>
+        <h2>AI Reasoning <span class="badge">LLM + x402</span></h2>
+        <div class="llm-bubble" id="llm-rationale">"Waiting for cycle…"</div>
         <div class="llm-meta">
-          <div class="item">
-            <div class="label">Action</div>
-            <div class="value" id="llm-action">—</div>
-          </div>
-          <div class="item">
-            <div class="label">Confidence</div>
-            <div class="value" id="llm-confidence">—</div>
-          </div>
-          <div class="item">
-            <div class="label">Pair</div>
-            <div class="value" id="llm-pair">—</div>
-          </div>
+          <div class="item"><div class="label">Action</div><div class="value" id="llm-action">—</div></div>
+          <div class="item"><div class="label">Confidence</div><div class="value" id="llm-confidence">—</div></div>
+          <div class="item"><div class="label">Pair</div><div class="value" id="llm-pair">—</div></div>
         </div>
         <div class="x402-status">
           <span class="icon" id="x402-icon">⏸</span>
@@ -298,20 +258,12 @@
         </div>
       </div>
 
-      <!-- ============================== -->
-      <!-- KARTU 3: SISI BLOCKCHAIN       -->
-      <!-- ============================== -->
+      <!-- Card 3: Blockchain -->
       <div class="card">
-        <h2>③ Sisi Blockchain <span class="badge">Audit</span></h2>
+        <h2>On-Chain Record <span class="badge">Audit Trail</span></h2>
         <div class="kpi-row">
-          <div class="kpi">
-            <div class="label">Decisions</div>
-            <div class="value" id="kpi-strategies">0</div>
-          </div>
-          <div class="kpi">
-            <div class="label">Reputation</div>
-            <div class="value" id="kpi-reputation">0</div>
-          </div>
+          <div class="kpi"><div class="label">Decisions</div><div class="value" id="kpi-strategies">0</div></div>
+          <div class="kpi"><div class="label">Reputation</div><div class="value" id="kpi-reputation">0</div></div>
         </div>
         <div style="margin-top:12px">
           <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">Recent On-Chain Decisions</div>
@@ -331,226 +283,191 @@
       Built for Casper Agentic Buildathon 2026 · Odra 2.7 · x402 · CSPR.trade MCP · CSPR.cloud REST + Streaming
     </div>
   </div>
+</div>
 
-  <script>
-    // -------- CSPR.click wallet integration --------
-    const WALLET_PROVIDER_URL = 'https://cspr.click';
-    const API_BASE = 'http://localhost:4000';
-    const EXPLORER = 'https://testnet.cspr.live';
+<script>
+  const API_BASE = 'http://localhost:4000';
+  const EXPLORER = 'https://testnet.cspr.live';
+  let connectedPubkey = null;
+  let eventSource = null;
+  let recentDecisions = [];
 
-    let connectedPubkey = null;
-    let eventSource = null;
-    let recentDecisions = [];
+  // Landing → Dashboard
+  document.getElementById('btn-enter').addEventListener('click', () => {
+    document.getElementById('landing').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    initDashboard();
+  });
+  document.getElementById('btn-back').addEventListener('click', () => {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('landing').style.display = 'flex';
+  });
 
-    // -------- helpers --------
-    function setNet(state, text) {
-      const pill = document.getElementById('net-pill');
-      const dot = document.getElementById('net-dot');
-      const t = document.getElementById('net-text');
-      pill.classList.remove('live', 'alert');
-      if (state === 'live') pill.classList.add('live');
-      if (state === 'alert') pill.classList.add('alert');
-      t.textContent = text;
+  function setNet(state, text) {
+    const pill = document.getElementById('net-pill');
+    pill.classList.remove('live', 'alert');
+    if (state === 'live') pill.classList.add('live');
+    if (state === 'alert') pill.classList.add('alert');
+    document.getElementById('net-text').textContent = text;
+  }
+
+  function shortenHash(h, head = 10, tail = 6) {
+    if (!h) return '—';
+    return h.slice(0, head) + '…' + h.slice(-tail);
+  }
+
+  function renderQueue(plats) {
+    const ul = document.getElementById('queue-list');
+    ul.innerHTML = '';
+    if (!plats || plats.length === 0) {
+      ul.innerHTML = '<li><span class="plat">—</span><span class="status">no data</span></li>';
+      return;
     }
-
-    function shortenHash(h, head = 10, tail = 6) {
-      if (!h) return '—';
-      return h.slice(0, head) + '…' + h.slice(-tail);
+    for (const p of plats) {
+      ul.innerHTML += '<li><span class="plat">' + p.plat + '</span><span class="status">' + p.status + '</span></li>';
     }
+  }
 
-    function renderQueue(plats) {
-      const ul = document.getElementById('queue-list');
-      ul.innerHTML = '';
-      if (!plats || plats.length === 0) {
-        ul.innerHTML = '<li><span class="plat">—</span><span class="status">no data</span></li>';
-        return;
+  function renderRecentDecisions() {
+    const el = document.getElementById('recent-tx');
+    if (recentDecisions.length === 0) {
+      el.innerHTML = '<div style="padding:8px;color:var(--color-text-muted);font-size:12px">No decisions yet — start the cycle</div>';
+      return;
+    }
+    el.innerHTML = '';
+    for (const d of recentDecisions) {
+      const oc = d.outcome === 'success' ? 'success' : 'reverted';
+      el.innerHTML += '<div class="row"><div class="left"><div class="action">' + d.action + '</div><div class="pair">' + d.pair + '</div></div><div class="right"><div class="outcome ' + oc + '">' + (d.outcome === 'success' ? '✓' : '✗') + ' ' + d.outcome + '</div><a class="hash" href="' + EXPLORER + '/deploy/' + d.tx_hash + '" target="_blank">' + shortenHash(d.tx_hash) + '</a></div></div>';
+    }
+  }
+
+  async function fetchHealth() {
+    try {
+      const h = await fetch(API_BASE + '/api/health').then(r => r.json());
+      if (h.ok) {
+        setNet('live', 'Live on ' + h.network);
+        document.getElementById('btn-run').disabled = false;
+        document.getElementById('status-line').textContent = 'Connected — Ready to run';
       }
-      for (const p of plats) {
-        const li = document.createElement('li');
-        li.innerHTML = '<span class="plat">' + p.plat + '</span><span class="status">' + p.status + '</span>';
-        ul.appendChild(li);
+      if (h.contracts) {
+        if (h.contracts.revenue_emitter) document.getElementById('link-rev').href = EXPLORER + '/contract/' + h.contracts.revenue_emitter;
+        if (h.contracts.agent_vault) document.getElementById('link-vault').href = EXPLORER + '/contract/' + h.contracts.agent_vault;
       }
+    } catch (e) {
+      setNet('alert', 'Backend offline');
     }
+  }
 
-    function renderRecentDecisions() {
-      const el = document.getElementById('recent-tx');
-      if (recentDecisions.length === 0) {
-        el.innerHTML = '<div style="padding:8px;color:var(--color-text-muted);font-size:12px">No decisions yet — start the cycle</div>';
-        return;
+  async function refreshState() {
+    try {
+      const s = await fetch(API_BASE + '/api/state').then(r => r.json());
+      document.getElementById('kpi-strategies').textContent = s.totalStrategies ?? 0;
+      document.getElementById('kpi-reputation').textContent = s.reputation ?? 0;
+    } catch (e) {}
+  }
+
+  async function runAgentCycle() {
+    const btn = document.getElementById('btn-run');
+    btn.disabled = true;
+    const source = document.getElementById('in-source').value;
+    const amountUsd = Number(document.getElementById('in-amount-usd').value);
+    const cspr = amountUsd / 0.10;
+    const amountMotes = String(Math.floor(cspr * 1e9));
+
+    document.getElementById('llm-rationale').textContent = '"Analyzing on-chain data… fetching premium signal via x402…"';
+    document.getElementById('status-line').textContent = 'Running cycle for $' + amountUsd + ' on ' + source;
+
+    try {
+      const res = await fetch(API_BASE + '/api/cycle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amountMotes, source, ownerAddress: connectedPubkey || '02agent' }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Cycle failed');
+
+      if (data.lastSimulated) {
+        const t = data.lastSimulated;
+        document.getElementById('gate-icon').classList.add('open');
+        document.getElementById('gate-state').textContent = 'Gate Open — Vehicle Exiting';
+        document.getElementById('gate-sub').textContent = t.plat + ' parked ' + t.durationMin + 'min';
+        document.getElementById('last-tx').style.display = 'block';
+        document.getElementById('last-tx-plat').textContent = t.plat;
+        document.getElementById('last-tx-dur').textContent = t.durationMin + ' min';
+        document.getElementById('last-tx-cost').textContent = '$' + t.costUsd.toFixed(2);
+        document.getElementById('last-tx-motes').textContent = t.motes + ' motes';
+        document.getElementById('last-tx-hash').textContent = t.hash;
+        renderQueue([{ plat: t.plat, status: 'exited ✓' }, { plat: 'B 5678 XYZ', status: 'queued' }, { plat: 'D 1234 ABC', status: 'queued' }]);
       }
-      el.innerHTML = '';
-      for (const d of recentDecisions) {
-        const row = document.createElement('div');
-        row.className = 'row';
-        const outcome = d.outcome === 'success' ? 'success' : 'reverted';
-        const outcomeLabel = d.outcome === 'success' ? '✓' : '✗';
-        row.innerHTML = '<div class="left"><div class="action">' + d.action + '</div><div class="pair">' + d.pair + '</div></div><div class="right"><div class="outcome ' + outcome + '">' + outcomeLabel + ' ' + d.outcome + '</div><a class="hash" href="' + EXPLORER + '/deploy/' + d.tx_hash + '" target="_blank">' + shortenHash(d.tx_hash) + '</a></div>';
-        el.appendChild(row);
+
+      const p = data.proposal;
+      document.getElementById('llm-rationale').textContent = '"' + (p.rationale || 'Strategy executed.') + '"';
+      document.getElementById('llm-action').textContent = p.action;
+      document.getElementById('llm-confidence').textContent = (p.confidence || 0) + '%';
+      document.getElementById('llm-pair').textContent = p.pair;
+      if (p.x402Proof) {
+        document.getElementById('x402-icon').textContent = '✓';
+        document.getElementById('x402-label').textContent = 'x402 Verified · 0.001 CSPR paid';
+        document.getElementById('x402-detail').textContent = 'Signal via ' + (p.x402Proof.facilitator || 'localhost:4001');
       }
-    }
 
-    // -------- backend integration --------
-    async function fetchHealth() {
-      try {
-        const h = await fetch(API_BASE + '/api/health').then(r => r.json());
-        if (h.ok) {
-          setNet('live', 'Live on ' + h.network);
-          document.getElementById('btn-run').disabled = false;
-        } else {
-          setNet('alert', 'Backend error');
-        }
-        if (h.contracts) {
-          if (h.contracts.revenue_emitter) {
-            document.getElementById('link-rev').href = EXPLORER + '/contract/' + h.contracts.revenue_emitter;
-          }
-          if (h.contracts.agent_vault) {
-            document.getElementById('link-vault').href = EXPLORER + '/contract/' + h.contracts.agent_vault;
-          }
-        }
-        return h;
-      } catch (e) {
-        setNet('alert', 'Backend offline');
-        return null;
-      }
-    }
-
-    async function refreshState() {
-      try {
-        const s = await fetch(API_BASE + '/api/state').then(r => r.json());
-        if (s.totalAssets !== undefined) {
-          document.getElementById('kpi-strategies').textContent = s.totalStrategies ?? 0;
-          document.getElementById('kpi-reputation').textContent = s.reputation ?? 0;
-        }
-      } catch (e) { /* backend offline */ }
-    }
-
-    async function runAgentCycle() {
-      const btn = document.getElementById('btn-run');
-      btn.disabled = true;
-      const source = document.getElementById('in-source').value;
-      const amountUsd = Number(document.getElementById('in-amount-usd').value);
-      // 1 CSPR = $0.10 (env override available). 1 CSPR = 1e9 motes.
-      const cspr = amountUsd / 0.10;
-      const amountMotes = String(Math.floor(cspr * 1e9));
-
-      document.getElementById('llm-rationale').textContent = '"Memanggil cycle… membaca data on-chain…"';
-      document.getElementById('status-line').textContent = 'Running cycle for ' + amountUsd + ' USD on ' + source;
-
-      try {
-        const res = await fetch(API_BASE + '/api/cycle', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: amountMotes, source, ownerAddress: connectedPubkey || '02agent' }),
+      if (data.execution) {
+        recentDecisions.unshift({
+          action: p.action, pair: p.pair,
+          outcome: data.execution.vaultResult?.outcome || 'success',
+          tx_hash: data.execution.vaultResult?.txHash || data.execution.txHash,
         });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'cycle failed');
+        if (recentDecisions.length > 10) recentDecisions = recentDecisions.slice(0, 10);
+        renderRecentDecisions();
+      }
+      document.getElementById('status-line').textContent = '✓ Cycle Complete';
+      await refreshState();
+    } catch (e) {
+      document.getElementById('llm-rationale').textContent = '"' + e.message + '"';
+      document.getElementById('status-line').textContent = '✗ ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
 
-        // Kartu 1 (Lapangan): last transaction from data
-        if (data.lastSimulated) {
-          const t = data.lastSimulated;
+  function connectEventStream() {
+    try {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource(API_BASE + '/api/events');
+      eventSource.addEventListener('strategy', (ev) => {
+        try {
+          const d = JSON.parse(ev.data);
           document.getElementById('gate-icon').classList.add('open');
-          document.getElementById('gate-state').textContent = 'Palang Terbuka';
-          document.getElementById('gate-sub').textContent = 'Mobil ' + t.plat + ' keluar';
-          document.getElementById('last-tx').style.display = 'block';
-          document.getElementById('last-tx-plat').textContent = t.plat;
-          document.getElementById('last-tx-dur').textContent = t.durationMin + ' menit';
-          document.getElementById('last-tx-cost').textContent = '$' + t.costUsd.toFixed(2);
-          document.getElementById('last-tx-motes').textContent = t.motes + ' motes';
-          document.getElementById('last-tx-hash').textContent = t.hash;
-          renderQueue([
-            { plat: t.plat, status: 'keluar ✓' },
-            { plat: 'B 5678 XYZ', status: 'antri' },
-            { plat: 'D 1234 ABC', status: 'antri' },
-          ]);
-        }
-
-        // Kartu 2 (Kognitif)
-        const p = data.proposal;
-        document.getElementById('llm-rationale').textContent = '"' + (p.rationale || 'No rationale available.') + '"';
-        document.getElementById('llm-action').textContent = p.action;
-        document.getElementById('llm-confidence').textContent = (p.confidence || 0) + '%';
-        document.getElementById('llm-pair').textContent = p.pair;
-        if (p.x402Proof) {
-          document.getElementById('x402-icon').textContent = '✓';
-          document.getElementById('x402-label').textContent = 'x402 verified · 0.001 CSPR paid';
-          document.getElementById('x402-detail').textContent = 'Signal: ' + (p.x402Proof.facilitator || 'localhost:4001') + ' · sig ' + shortenHash(p.x402Proof.settleTxHash || p.x402Proof.paymentHeader, 8, 4);
-        }
-
-        // Kartu 3 (Chain)
-        if (data.execution) {
-          recentDecisions.unshift({
-            action: p.action,
-            pair: p.pair,
-            outcome: data.execution.vaultResult?.outcome || 'success',
-            tx_hash: data.execution.vaultResult?.txHash || data.execution.txHash,
-          });
+          document.getElementById('gate-state').textContent = 'Gate Open';
+          document.getElementById('gate-sub').textContent = 'New strategy executed';
+          if (d.rationale) document.getElementById('llm-rationale').textContent = '"' + d.rationale + '"';
+          recentDecisions.unshift(d);
           if (recentDecisions.length > 10) recentDecisions = recentDecisions.slice(0, 10);
           renderRecentDecisions();
-        }
-        document.getElementById('status-line').textContent = '✓ Cycle complete';
-        await refreshState();
-      } catch (e) {
-        document.getElementById('llm-rationale').textContent = '"' + e.message + '"';
-        document.getElementById('status-line').textContent = '✗ ' + e.message;
-      } finally {
-        btn.disabled = false;
-      }
-    }
+          refreshState();
+        } catch {}
+      });
+      eventSource.addEventListener('revenue', (ev) => {
+        try {
+          const d = JSON.parse(ev.data);
+          document.getElementById('gate-icon').classList.add('open');
+          document.getElementById('gate-state').textContent = 'Vehicle Exiting';
+          document.getElementById('gate-sub').textContent = '+' + d.amount + ' motes from ' + d.source;
+          document.getElementById('last-tx').style.display = 'block';
+          document.getElementById('last-tx-plat').textContent = d.source;
+          document.getElementById('last-tx-motes').textContent = d.amount + ' motes';
+          document.getElementById('last-tx-hash').textContent = d.reference;
+        } catch {}
+      });
+      eventSource.onerror = () => setNet('alert', 'SSE Disconnected');
+    } catch (e) {}
+  }
 
-    // -------- SSE feed (real-time events from backend) --------
-    function connectEventStream() {
-      try {
-        if (eventSource) eventSource.close();
-        eventSource = new EventSource(API_BASE + '/api/events');
-        eventSource.addEventListener('strategy', (ev) => {
-          try {
-            const d = JSON.parse(ev.data);
-            // Update Kartu 1: new vehicle out
-            document.getElementById('gate-icon').classList.add('open');
-            document.getElementById('gate-state').textContent = 'Palang Terbuka';
-            document.getElementById('gate-sub').textContent = 'New strategy executed';
-            // Update Kartu 2: LLM thinking
-            if (d.rationale) {
-              document.getElementById('llm-rationale').textContent = '"' + d.rationale + '"';
-            }
-            // Update Kartu 3: recent decisions
-            recentDecisions.unshift(d);
-            if (recentDecisions.length > 10) recentDecisions = recentDecisions.slice(0, 10);
-            renderRecentDecisions();
-            refreshState();
-          } catch {}
-        });
-        eventSource.addEventListener('revenue', (ev) => {
-          try {
-            const d = JSON.parse(ev.data);
-            // Update Kartu 1: vehicle just left
-            document.getElementById('gate-icon').classList.add('open');
-            document.getElementById('gate-state').textContent = 'Mobil Keluar';
-            document.getElementById('gate-sub').textContent = '+' + d.amount + ' motes from ' + d.source;
-            document.getElementById('last-tx').style.display = 'block';
-            document.getElementById('last-tx-plat').textContent = d.source;
-            document.getElementById('last-tx-dur').textContent = '—';
-            document.getElementById('last-tx-cost').textContent = '—';
-            document.getElementById('last-tx-motes').textContent = d.amount + ' motes';
-            document.getElementById('last-tx-hash').textContent = d.reference;
-          } catch {}
-        });
-        eventSource.onerror = () => {
-          setNet('alert', 'SSE disconnected');
-        };
-      } catch (e) {
-        console.warn('EventSource not available', e);
-      }
-    }
-
-    // -------- boot --------
-    window.onload = () => {
-      document.getElementById('btn-run').addEventListener('click', runAgentCycle);
-      fetchHealth();
-      refreshState();
-      setInterval(() => { fetchHealth(); refreshState(); }, 5000);
-      connectEventStream();
-    };
-  </script>
+  function initDashboard() {
+    document.getElementById('btn-run').addEventListener('click', runAgentCycle);
+    fetchHealth(); refreshState();
+    setInterval(() => { fetchHealth(); refreshState(); }, 5000);
+    connectEventStream();
+  }
+</script>
 </body>
 </html>
