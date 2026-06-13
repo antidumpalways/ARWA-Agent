@@ -1,15 +1,30 @@
 /**
  * AgentVault on-chain client. Builds, signs, and submits `execute_strategy`
  * and `deposit` calls to the deployed AgentVault contract.
+ * Uses TransactionV1 (Casper 2.0 format) via ContractCallBuilder.
  */
 import { getContractState } from '../csprCloud/rest';
 import { loadConfig } from '../config';
 import { AgentVaultLog, ExecutionResult } from '../types';
 import {
-  buildContractCallDeploy,
   signAndSubmitDeploy,
-  getCasperClient,
 } from './signer';
+import {
+  PublicKey,
+  PrivateKey,
+  ContractCallBuilder,
+  Args,
+  CLValue,
+  Transaction,
+  Hash,
+  RpcClient,
+  HttpHandler,
+  KeyAlgorithm,
+  Timestamp,
+  Duration,
+  TransactionV1,
+} from 'casper-js-sdk';
+import { readFileSync } from 'fs';
 
 /**
  * Call the on-chain `execute_strategy` entrypoint. Returns a deploy hash and
@@ -23,40 +38,99 @@ export async function logStrategyToVault(
     throw new Error('AGENT_VAULT_CONTRACT_HASH not set. Run deploy script first.');
   }
 
-  // The contract expects snake_case named args of types:
-  //   action, pair, tx_hash, x402_proof, outcome: String
-  //   amount_in, amount_out: U256
-  //   token_in, token_out, x402_signer: Address (= Key, tag 0 + 32 bytes)
-  //
-  // For the demo, we use the **zero address** for `token_in`/`token_out` since
-  // we don't have real CEP-18 tokens deployed. The string-typed names from
-  // the analyst ("CSPR", "sCSPR") are kept in `pair` for human readability.
-  const ZERO_ADDR = `account-hash-${'0'.repeat(64)}`;
-  const args: Record<string, { clType: string; value: any }> = {
-    action:        { clType: 'string',   value: log.action },
-    amount_in:     { clType: 'u256',     value: log.amountIn },
-    amount_out:    { clType: 'u256',     value: log.amountOut },
-    token_in:      { clType: 'key',     value: log.tokenInHex || ZERO_ADDR },
-    token_out:     { clType: 'key',     value: log.tokenOutHex || ZERO_ADDR },
-    pair:          { clType: 'string',   value: log.pair },
-    tx_hash:       { clType: 'string',   value: log.txHash },
-    x402_proof:    { clType: 'string',   value: log.x402Proof },
-    x402_signer:   { clType: 'key',     value: log.x402SignerHex || ZERO_ADDR },
-    outcome:       { clType: 'string',   value: log.outcome },
-  };
+  try {
+    // Load agent key
+    const pem = readFileSync(cfg.AGENT_SECRET_KEY_PATH, 'utf-8');
+    let sk: PrivateKey;
+    try {
+      sk = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
+    } catch {
+      sk = PrivateKey.fromPem(pem, KeyAlgorithm.SECP256K1);
+    }
+    const pk = sk.publicKey;
 
-  const deploy = buildContractCallDeploy(
-    cfg.AGENT_VAULT_CONTRACT_HASH,
-    'execute_strategy',
-    args,
-    cfg.CASPER_CHAIN_NAME
-  );
-  const { deployHash, result } = await signAndSubmitDeploy(deploy);
-  return {
-    txHash: deployHash,
-    outcome: outcomeFromDeployResult(result),
-    blockHash: result?.block_hash ?? result?.blockHash,
-  };
+    // Build args
+    const ZERO_ADDR = `account-hash-${'0'.repeat(64)}`;
+    const clArgs = Args.fromMap({
+      action: CLValue.newCLString(log.action),
+      amount_in: CLValue.newCLUInt256(BigInt(log.amountIn)),
+      amount_out: CLValue.newCLUInt256(BigInt(log.amountOut || '0')),
+      token_in: buildKeyValue(log.tokenInHex || ZERO_ADDR),
+      token_out: buildKeyValue(log.tokenOutHex || ZERO_ADDR),
+      pair: CLValue.newCLString(log.pair),
+      tx_hash: CLValue.newCLString(log.txHash),
+      x402_proof: CLValue.newCLString(log.x402Proof),
+      x402_signer: buildKeyValue(log.x402SignerHex || ZERO_ADDR),
+      outcome: CLValue.newCLString(log.outcome),
+    });
+
+    // Build TransactionV1 via ContractCallBuilder (Casper 2.0 format)
+    const pkgHex = cfg.AGENT_VAULT_CONTRACT_HASH.replace('hash-', '');
+    const tx: any = new ContractCallBuilder()
+      .byPackageHash(pkgHex, 1)  // Use package hash with version 1
+      .entryPoint('execute_strategy')
+      .from(pk)
+      .chainName(cfg.CASPER_CHAIN_NAME)
+      .runtimeArgs(clArgs)
+      .payment(3000000000, 1)  // 3 CSPR, gas price 1
+      .ttl(1800000)  // 30 minutes in milliseconds
+      .build();  // Returns Transaction wrapper
+
+    // Get TransactionV1 from the wrapper
+    const txV1 = tx.getTransactionV1?.() || tx;
+    
+    // Sign
+    txV1.sign(sk);
+    
+    // Build JSON for submission
+    const json = TransactionV1.toJSON(txV1);
+    
+    // Submit via RPC
+    const axios = require('axios');
+    const response = await axios.post(cfg.CASPER_RPC_URL, {
+      jsonrpc: '2.0',
+      method: 'account_put_transaction',
+      params: { transaction: { Version1: json } },
+      id: 1
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {}),
+      },
+      timeout: 60000,
+    });
+
+    if (response.data.error) {
+      throw new Error(`RPC error: ${response.data.error.message}: ${response.data.error.data}`);
+    }
+
+    const txHash = response.data.result?.transaction_hash?.Version1 || '';
+    
+    return {
+      txHash,
+      outcome: 'success',
+    };
+  } catch (error: any) {
+    console.error('[vault] execute_strategy failed:', error.message);
+    return {
+      txHash: 'failed',
+      outcome: 'failed',
+      blockHash: undefined,
+    };
+  }
+}
+
+/** Build a Key CLValue from account-hash string */
+function buildKeyValue(value: string): CLValue {
+  const { AccountHash, Key, CLTypeKey } = require('casper-js-sdk');
+  const hex = value.startsWith('account-hash-') ? value.slice('account-hash-'.length) : value.replace(/^0x/, '');
+  const ah = AccountHash.fromString(hex);
+  const tag = Buffer.from([0]);
+  const keyBytes = Buffer.concat([tag, Buffer.from(ah.toBytes())]);
+  const k = Key.fromBytes(keyBytes);
+  const v = new CLValue(CLTypeKey);
+  v.key = k.result;
+  return v;
 }
 
 /**

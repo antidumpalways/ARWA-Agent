@@ -179,12 +179,16 @@ export async function payAndFetchViaX402<T = any>(
   const assetBytes32 = assetBare.padStart(64, '0').slice(-64);
 
   // Use the server's `extra` (name, version) to build the EIP-712 domain
-  const domainName = reqs.extra?.name ?? 'Caspar x402';
-  const domainVersion = reqs.extra?.version ?? '1';
   // Network format: Go client uses "casper-test" (no "casper:" CAIP-2 prefix)
   // in the EIP-712 domain. The wire format uses "casper:casper-test".
   const networkForDomain = reqs.network.replace(/^casper:/, '');
 
+  // Provide EIP-712 domain according to CSPR.cloud / casper-x402 spec:
+  // name: from extra.name or "Casper x402"
+  // version: from extra.version or "1"
+  // salt: keccak256(networkForDomain + contractPackageHash)
+  const domainName = reqs.extra?.name ?? 'Casper x402';
+  const domainVersion = reqs.extra?.version ?? '1';
   const domain = buildDomain(
     domainName,
     domainVersion,
@@ -254,6 +258,7 @@ export async function payAndFetchViaX402<T = any>(
     message,
     { domainTypes: CASPER_DOMAIN_TYPES }
   );
+  console.log(`[x402-client] digest: ${Buffer.from(digest).toString('hex')}`);
   const signingInput = digest;
 
   // 5) sign with our private key — produce 65-byte sig (r||s||v) using Noble

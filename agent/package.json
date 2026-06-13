@@ -12,6 +12,7 @@
     "analyst": "tsx src/analyst.ts",
     "executor": "tsx src/executor.ts",
     "deploy": "tsx scripts/deploy.ts",
+    "setup": "tsx scripts/setup.ts",
     "record": "tsx scripts/record-deployment.ts",
     "simulate": "tsx scripts/simulate-parking-revenue.ts",
     "demo": "tsx scripts/demo-cycle.ts",
@@ -25,7 +26,9 @@
   },
   "dependencies": {
     "@casper-ecosystem/casper-eip-712": "^1.2.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@make-software/cspr-trade-mcp": "^0.6.0",
+    "@make-software/cspr-trade-mcp-sdk": "^0.6.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "axios": "^1.7.2",
     "casper-js-sdk": "^5.0.0",
     "cors": "^2.8.5",

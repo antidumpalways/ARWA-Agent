@@ -1,11 +1,14 @@
 /**
- * Real MCP client for CSPR.trade DEX.
+ * MCP client for CSPR.trade DEX (mainnet only).
  *
- * Connects to https://mcp.cspr.trade/mcp and exposes high-level helpers for
- * quoting, building swaps, providing liquidity, etc.
+ * CSPR.trade MCP standalone endpoint: https://mcp.cspr.trade/mcp
+ * This endpoint provides build_swap, get_quote, and other trading tools.
+ *
+ * Note: CSPR.cloud MCP (testnet & mainnet) only has read-only DEX tools
+ * (get_swaps, get_dexes, get_ft_dex_rates) but NOT build_swap.
+ * For real on-chain swaps, use mainnet with CSPR.trade MCP.
  *
  * Docs: https://mcp.cspr.trade
- * SDK option: npm i @make-software/cspr-trade-mcp
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -20,6 +23,7 @@ export async function getCsprTradeMcp(): Promise<Client> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const cfg = loadConfig();
+    // CSPR.trade MCP standalone (mainnet only, no auth required)
     const transport = new StreamableHTTPClientTransport(new URL(cfg.CSPR_TRADE_MCP_URL));
     const client = new Client(
       { name: 'parkflow-executor', version: '0.2.0' },
@@ -80,18 +84,57 @@ export async function buildUnsignedDeploy(params: {
   payerAddress: string;
 }): Promise<Record<string, unknown>> {
   const client = await getCsprTradeMcp();
+  const toolName = params.action === 'swap' ? 'build_swap' : `build_${params.action}`;
   const res = await client.callTool({
-    name: 'build_' + params.action,
+    name: toolName,
     arguments: {
       token_in: params.tokenIn,
       token_out: params.tokenOut,
-      amount_in: params.amountIn,
+      amount: params.amountIn,
+      type: 'exact_in',
       min_amount_out: params.minAmountOut,
-      payer: params.payerAddress,
+      sender_public_key: params.payerAddress,
       slippage_tolerance_bps: 50,
     },
   });
-  return parseResult(res);
+  const parsed = parseResult(res);
+  // Check if MCP returned an error
+  if (typeof parsed === 'string') {
+    throw new Error(`CSPR.trade MCP error: ${parsed}`);
+  }
+  if (parsed?.error) {
+    throw new Error(`CSPR.trade MCP error: ${parsed.error}`);
+  }
+  return parsed;
+}
+
+/**
+ * Submit a signed transaction via MCP submit_transaction tool.
+ */
+export async function submitViaMcp(signedTxJson: Record<string, any>): Promise<{ deployHash: string; result: any }> {
+  const client = await getCsprTradeMcp();
+  
+  // Send as JSON string (MCP expects string, not object)
+  const res = await client.callTool({
+    name: 'submit_transaction',
+    arguments: {
+      signed_deploy_json: JSON.stringify(signedTxJson),
+    },
+  });
+  
+  const parsed = parseResult(res);
+  
+  if (parsed?.error) {
+    throw new Error(`MCP submit error: ${parsed.error}`);
+  }
+  
+  // Extract deploy hash from result
+  const deployHash = parsed?.deploy_hash || parsed?.transaction_hash || parsed?.hash || '';
+  
+  return {
+    deployHash,
+    result: parsed,
+  };
 }
 
 function parseResult(res: any): any {
@@ -99,7 +142,22 @@ function parseResult(res: any): any {
   if (Array.isArray(res?.content)) {
     for (const c of res.content) {
       if (c.type === 'text' && typeof c.text === 'string') {
-        try { return JSON.parse(c.text); } catch { return c.text; }
+        // Try to parse as JSON first
+        try { return JSON.parse(c.text); } catch {}
+        
+        // If not JSON, check if it contains an error
+        if (c.text.includes('Validation error') || c.text.includes('error:')) {
+          return { error: c.text };
+        }
+        
+        // Extract JSON from text (e.g., "Swap transaction JSON:\n{...}")
+        const jsonMatch = c.text.match(/\{[\s\S]*"hash"[\s\S]*"payload"[\s\S]*\}/);
+        if (jsonMatch) {
+          try { return JSON.parse(jsonMatch[0]); } catch {}
+        }
+        
+        // Return raw text if nothing else works
+        return c.text;
       }
     }
   }

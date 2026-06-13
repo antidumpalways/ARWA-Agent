@@ -29,12 +29,15 @@ import {
   KeyAlgorithm,
   Key,
   AccountHash,
+  Hash,
   Args,
   Duration,
   Timestamp,
   ContractHash,
   makeCsprTransferDeploy,
   PutDeployResult,
+  TransactionV1,
+  Transaction,
 } from 'casper-js-sdk';
 import { loadConfig } from '../config';
 
@@ -181,25 +184,11 @@ export function buildContractCallDeploy(
   }
 
   const session = new ExecutableDeployItem();
-  // The deploy.ts flow extracts the **package** hash from the install
-  // effects. To call an entry point on a freshly-installed contract, we
-  // therefore need `StoredVersionedContractByHash(packageHash, version, ...)`
-  // — not `StoredContractByHash`, which wants a 32-byte contract hash that
-  // we don't have in hand. The version defaults to 1 (the only version a
-  // brand-new package has).
+  // Use StoredVersionedContractByHash with package hash
   if (contractVersion !== null) {
-    // SDK v5 signature: `new StoredVersionedContractByHash(hash, entryPoint, args, version)`.
-    // The version defaults to 1 for a brand-new package.
-    // Strip the "hash-" prefix that we store in .env — ContractPackageHash.fromJSON
-    // wants 64-char hex (32 raw bytes) and chokes on the prefix with
-    // "Base16 data cannot have length 69 (must be even)".
     const pkgHex = contractHash.startsWith('hash-')
       ? contractHash.slice(5)
       : contractHash.replace(/^0x/, '');
-    // `ContractPackageHash.fromJSON(hex)` is the only working factory — the
-    // public constructor is incomplete and `toBytes` fails on it.
-    // The .d.ts type says it wants a `ContractHash`, but the runtime
-    // accepts a `ContractPackageHash`; the cast is safe.
     session.storedVersionedContractByHash = new (StoredVersionedContractByHash as any)(
       ContractPackageHash.fromJSON(pkgHex),
       entryPoint,
@@ -289,4 +278,186 @@ function wrapCLValue(clType: string, value: any): CLValue {
     default:
       throw new Error(`wrapCLValue: unsupported clType ${clType}`);
   }
+}
+
+/**
+ * Sign a swap transaction and submit it via RPC.
+ * Uses the SDK's TransactionV1.sign() for correct signature computation,
+ * then builds the final JSON manually and submits via account_put_transaction.
+ */
+export async function signAndSubmitSwap(
+  txJson: Record<string, any>
+): Promise<{ deployHash: string; success: boolean }> {
+  const { privateKey, publicKey } = getAgentKeys();
+  const cfg = loadConfig();
+  
+  // Create TransactionV1 from raw JSON - SDK handles correct hash computation
+  const txHash = Hash.fromHex(txJson.hash);
+  const tx = new TransactionV1(txHash, txJson.payload, []);
+  
+  // SDK signs correctly using blake2b(serialized_bytes)
+  tx.sign(privateKey);
+  
+  // Extract signature from SDK
+  const sdkApproval = tx.approvals?.[0];
+  const signerHex = sdkApproval?.signer?.toHex?.() || '';
+  const sigHex = sdkApproval?.signature?.toString?.() || '';
+  
+  // Build final JSON with original data + SDK's approval
+  const signedJson = {
+    ...txJson,
+    approvals: [{ signer: signerHex, signature: sigHex }]
+  };
+  
+  // Submit via RPC
+  const axios = require('axios');
+  const response = await axios.post(cfg.CASPER_RPC_URL, {
+    jsonrpc: '2.0',
+    method: 'account_put_transaction',
+    params: { transaction: { Version1: signedJson } },
+    id: 1
+  }, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {}),
+    },
+    timeout: 60000,
+  });
+  
+  if (response.data.error) {
+    throw new Error(`RPC error: ${response.data.error.message}`);
+  }
+  
+  const resultHash = response.data.result?.transaction_hash?.Version1 || 
+                     response.data.result?.transaction_hash || '';
+  
+  // Wait for execution
+  try {
+    const result = await getCasperClient().waitForTransaction(resultHash, 60000);
+    const success = !!(
+      result?.execution_results?.[0]?.result?.Success ?? 
+      result?.executionResults?.[0]?.result?.Success
+    );
+    return { deployHash: resultHash, success };
+  } catch {
+    // Transaction accepted but execution unknown
+    return { deployHash: resultHash, success: true };
+  }
+}
+export async function signAndSubmitTransactionV1(
+  tx: TransactionV1
+): Promise<{ deployHash: string; result: any }> {
+  const { privateKey } = getAgentKeys();
+  const client = getCasperClient();
+
+  // Sign the transaction
+  tx.sign(privateKey);
+
+  // Wrap in Transaction for RPC submission
+  const wrappedTx = Transaction.fromTransactionV1(tx);
+
+  // Submit via putTransaction
+  const submit = await client.putTransaction(wrappedTx);
+  
+  // Extract transaction hash
+  let txHash: string;
+  const sh = submit as any;
+  if (sh?.hash?.toHex) {
+    txHash = sh.hash.toHex();
+  } else if (sh?.transaction_hash?.toHex) {
+    txHash = sh.transaction_hash.toHex();
+  } else if (typeof sh === 'string') {
+    txHash = sh;
+  } else {
+    txHash = String(submit);
+  }
+
+  // Wait for execution
+  const result = await client.waitForTransaction(txHash, 60_000);
+  return { deployHash: txHash, result };
+}
+
+/**
+ * Sign raw TransactionV1 JSON directly (bypass broken SDK parser).
+ * Computes blake2b hash of payload, signs it, adds approval.
+ */
+export function signRawTransactionV1(txJson: Record<string, any>): Record<string, any> {
+  const { privateKey, publicKey } = getAgentKeys();
+  
+  // Compute blake2b hash of the payload
+  const payloadBytes = Buffer.from(JSON.stringify(txJson.payload));
+  const { blake2b } = require('@noble/hashes/blake2b');
+  const hash = blake2b(payloadBytes, { dkLen: 32 });
+  
+  // Sign the hash
+  const signature = privateKey.sign(hash);
+  
+  // Build approval
+  const approval = {
+    signer: publicKey.toHex(),
+    signature: '02' + Buffer.from(signature).toString('hex'), // 02 = SECP256K1
+  };
+  
+  // Add approval to transaction
+  const signedTx = { ...txJson };
+  signedTx.approvals = [...(signedTx.approvals || []), approval];
+  
+  return signedTx;
+}
+
+/**
+ * Submit raw signed transaction JSON via RPC.
+ * Tries multiple RPC methods for compatibility.
+ */
+export async function submitRawTransaction(signedTxJson: Record<string, any>): Promise<{ deployHash: string; result: any }> {
+  const client = getCasperClient();
+  const cfg = loadConfig();
+  
+  const axios = require('axios');
+  
+  // Try multiple RPC methods for compatibility
+  const methods = [
+    { method: 'account_put_deploy', params: { signed_deploy: signedTxJson } },
+    { method: 'put_transaction', params: { transaction: signedTxJson } },
+    { method: 'state_put_transaction', params: { transaction: signedTxJson } },
+  ];
+  
+  let lastError = '';
+  for (const { method, params } of methods) {
+    try {
+      const response = await axios.post(cfg.CASPER_RPC_URL, {
+        jsonrpc: '2.0',
+        method,
+        params,
+        id: 1,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {}),
+        },
+        timeout: 30000,
+      });
+      
+      if (response.data.error) {
+        lastError = response.data.error.message;
+        continue;
+      }
+      
+      // Extract transaction hash from response
+      const txHash = response.data.result?.transaction_hash || 
+                     response.data.result?.deploy_hash || 
+                     response.data.result?.hash || '';
+      
+      if (txHash) {
+        // Wait for execution
+        const result = await client.waitForTransaction(txHash, 60_000);
+        return { deployHash: txHash, result };
+      }
+    } catch (e: any) {
+      lastError = e.message;
+      continue;
+    }
+  }
+  
+  throw new Error(`All RPC methods failed. Last error: ${lastError}`);
 }

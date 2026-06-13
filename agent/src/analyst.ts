@@ -69,9 +69,14 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
   const cfg = loadConfig();
   console.log('[analyst] revenue event', input.revenueEvent);
 
-  // 1) on-chain: agent account balance
+  // 1) on-chain: agent account balance (MCP - optional)
   const { publicKey } = await import('./casper/signer').then(m => m.getAgentKeys());
-  const account = await getAccountInfo(publicKey.toHex());
+  let account = { publicKey: publicKey.toHex(), balance: '0', staked: '0', delegations: 0, transfers: 0 };
+  try {
+    account = await getAccountInfo(publicKey.toHex());
+  } catch (e) {
+    console.warn('[analyst] account info fetch failed (MCP unavailable):', (e as Error).message?.slice(0, 80));
+  }
 
   // 2) on-chain: live AgentVault state (read via CSPR.cloud REST, no local node needed)
   let vaultOverview = { totalAssets: '0', globalReputation: 0, totalStrategies: 0 };
@@ -98,16 +103,21 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
     console.log(`[analyst] fetched ${recent.length} recent revenue events`);
   }
 
-  // 4) DEX quote for the strategy
+  // 4) DEX quote for the strategy (MCP - optional)
   const amountIn = input.revenueEvent.amount;
-  const quote = await getQuote('CSPR', 'sCSPR', amountIn, 'exact_in');
+  let quote = { amountOut: amountIn, priceImpact: '0%', route: ['CSPR', 'sCSPR'], minReceived: amountIn, pair: 'CSPR/sCSPR', expiresAt: Date.now() + 60000 };
+  try {
+    quote = await getQuote('CSPR', 'sCSPR', amountIn, 'exact_in');
+  } catch (e) {
+    console.warn('[analyst] quote fetch failed (MCP unavailable):', (e as Error).message?.slice(0, 80));
+  }
 
-  // 5) portfolio snapshot
+  // 5) portfolio snapshot (MCP - optional)
   let portfolio = { total: '0', breakdown: [] as any[] };
   try {
     portfolio = await getPortfolioValue(input.ownerAddress);
   } catch (e) {
-    console.warn('[analyst] portfolio fetch failed', e);
+    console.warn('[analyst] portfolio fetch failed (MCP unavailable):', (e as Error).message?.slice(0, 80));
   }
 
   // 6) pay for premium signal via x402

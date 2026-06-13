@@ -141,7 +141,7 @@ async function paymentRequired(res: Response, reason?: string) {
     asset: ASSET,
     maxTimeoutSeconds: 600,
     extra: {
-      name: meta.name,
+      name: 'Casper x402',
       version: meta.version,
       decimals: String(meta.decimals),
       symbol: meta.symbol,
@@ -208,8 +208,8 @@ async function verifyX402V2Signature(
     // but EIP-712 hashTypedData uses raw 32-byte AccountHash — strip the "00".
     const meta = await getAssetMeta();
     const domain = buildDomain(
-      meta.name, // must match what the client received in PAYMENT-REQUIRED extra.name
-      meta.version,
+      paymentRequirements.extra?.name ?? 'Casper x402',
+      paymentRequirements.extra?.version ?? meta.version,
       paymentRequirements.network.replace(/^casper:/, ''), // "casper-test", not "casper:casper-test"
       paymentRequirements.asset.padStart(64, '0').slice(-64)
     );
@@ -265,63 +265,65 @@ async function verifyX402V2Signature(
       validAfter: message.validAfter.toString(), validBefore: message.validBefore.toString(),
       nonce: message.nonce,
     }));
-    // Standard EIP-712 chain: keccak256(digest) → SHA-256 (Casper SDK quirk) →
-    // secp256k1 sign. The Casper SDK's PrivateKey.sign() applies SHA-256
-    // before secp256k1 sign, and the Go facilitator (make-software/casper-x402)
-    // expects the same. So we SHA-256 the EIP-712 digest here.
-    const eip712Digest = hashTypedData(
+    // Standard EIP-712 chain: keccak256(digest) → secp256k1 sign. We do NOT
+    // pre-hash with SHA-256 here because the client also doesn't (we use
+    // noble/secp256k1 directly, not the Casper SDK's pk.sign()).
+    const signedMessage = hashTypedData(
       domain,
       transferWithAuthorizationTypes,
       'TransferWithAuthorization',
       message,
       { domainTypes: CASPER_DOMAIN_TYPES }
     );
-    const { sha256: sha256Hash } = require('@noble/hashes/sha256');
-    const signedMessage = sha256Hash(eip712Digest);
+    console.log(`[x402-server] digest: ${Buffer.from(signedMessage).toString('hex')}`);
 
     // 3. Recover the public key from the signature and compare with the one in the payload.
     // The supplied public key is authoritative; the signature must recover to it
     // for some recovery bit v ∈ {0, 1}.
-    // The Casper x402 v2 protocol uses 64-byte signatures (R || S, no
-    // recovery byte). The Go facilitator (make-software/casper-x402) checks
-    // for 65 bytes but its VerifySignature accepts 64 bytes. We accept
-    // both: strip the trailing v byte if present, then verify.
-    const sigHex = signature.replace(/^0x/, '');
-    if (sigHex.length !== 128 && sigHex.length !== 130) {
-      return { valid: false, reason: `signature must be 64 or 65 bytes, got ${sigHex.length / 2}` };
-    }
+    const sigHex = signature.replace(/^0x/, '').padEnd(130, '0').slice(0, 130);
     const sigBytes = Buffer.from(sigHex, 'hex');
-    // Use only the first 64 bytes (R || S), ignore the v byte
-    const r = BigInt('0x' + Buffer.from(sigBytes.slice(0, 32)).toString('hex'));
-    const s = BigInt('0x' + Buffer.from(sigBytes.slice(32, 64)).toString('hex'));
-    // Parse supplied pubkey (34 bytes: algo + 33-byte compressed key)
+    if (sigBytes.length !== 65) {
+      return { valid: false, reason: `signature must be 65 bytes, got ${sigBytes.length} (hex: ${sigHex.slice(0, 40)}…)` };
+    }
+    console.log(`[x402-server] sig hex (full 130 chars): ${sigHex}`);
+    
+    // Casper signature: algo (1 byte) + r (32 bytes) + s (32 bytes)
+    const sigAlgo = sigBytes[0];
+    const r = BigInt('0x' + Buffer.from(sigBytes.slice(1, 33)).toString('hex'));
+    const s = BigInt('0x' + Buffer.from(sigBytes.slice(33, 65)).toString('hex'));
+
+    // Parse supplied pubkey (33 bytes compressed)
     let expectedPubHex: string;
     try {
       expectedPubHex = PublicKey.fromHex(publicKey).toHex();
     } catch (e: any) {
       return { valid: false, reason: `malformed public key: ${e.message?.slice(0, 60)}` };
     }
-    const expectedPubCompressed = expectedPubHex.slice(2); // 33 bytes compressed
+    const expectedPubCompressed = expectedPubHex.slice(2); // drop "02" algo
     let recoveredPubCompressed: string | null = null;
-    let v = -1;
-    for (const tryV of [0, 1]) {
+    let matchedV = -1;
+
+    for (let v = 0; v <= 1; v++) {
       try {
         const sig = new secp256k1.Signature(r, s);
-        const pub = sig.addRecoveryBit(tryV).recoverPublicKey(signedMessage).toRawBytes(true); // 33 bytes compressed
-        const rec = Buffer.from(pub).toString('hex');
-        if (rec === expectedPubCompressed) {
-          recoveredPubCompressed = rec;
-          v = tryV;
+        const pub = sig.addRecoveryBit(v).recoverPublicKey(signedMessage).toRawBytes(true); // 33 bytes compressed
+        const recHex = Buffer.from(pub).toString('hex');
+        if (recHex === expectedPubCompressed) {
+          recoveredPubCompressed = recHex;
+          matchedV = v;
           break;
         }
-      } catch {
-        // try next v
+      } catch (e) {
+        // try other v
       }
     }
+
     if (!recoveredPubCompressed) {
-      return { valid: false, reason: `signature does not match public key` };
+      return { valid: false, reason: `signature does not match public key (digest=${Buffer.from(signedMessage).toString('hex').slice(0,16)}…, expectedPub=${expectedPubCompressed.slice(0,16)}…, sigAlgo=${sigAlgo})` };
     }
-    console.log(`[x402-server] digest=${Buffer.from(signedMessage).toString('hex')} v=${v}`);
+
+    console.log(`[x402-server] digest=${Buffer.from(signedMessage).toString('hex')} v=${matchedV}`);
+    console.log(`[x402-server] expected pub=${expectedPubCompressed.slice(0, 16)}… recovered=${recoveredPubCompressed.slice(0, 16)}…`);
     // 4. Compute the account hash from the supplied public key
     const suppliedPub = PublicKey.fromHex(publicKey);
     const recoveredAccountHash = suppliedPub.accountHash().toHex().padStart(64, '0').slice(-64);
@@ -465,7 +467,7 @@ app.get('/signal', async (req: Request, res: Response) => {
     asset: ASSET,
     maxTimeoutSeconds: 600,
     extra: {
-      name: meta.name,
+      name: 'Casper x402',
       version: meta.version,
       decimals: String(meta.decimals),
       symbol: meta.symbol,

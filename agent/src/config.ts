@@ -23,8 +23,8 @@ const EnvSchema = z.object({
   CSPR_CLOUD_API_KEY: z.string().min(1),
   CSPR_CLOUD_MCP_URL: z.string().url().default('https://mcp.testnet.cspr.cloud/mcp'),
 
-  // CSPR.trade MCP
-  CSPR_TRADE_MCP_URL: z.string().url().default('https://mcp.cspr.trade/mcp'),
+  // CSPR.trade MCP (self-hosted for testnet, mainnet endpoint for production)
+  CSPR_TRADE_MCP_URL: z.string().url().default('http://localhost:3001/mcp'),
 
   // x402
   X402_FACILITATOR_URL: z.string().url().default('https://x402-facilitator.cspr.cloud'),

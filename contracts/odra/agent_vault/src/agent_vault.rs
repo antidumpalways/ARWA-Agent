@@ -74,7 +74,7 @@ pub struct AgentVault {
     // --- access control ---
     owner: Var<Address>,
     pending_owner: Var<Address>,
-    agent: Var<Address>,           // authorized executor (the Executor agent)
+    agents: Mapping<Address, bool>,  // Multi-agent support: agent => authorized
     paused: Var<bool>,
 
     // --- accounting ---
@@ -108,7 +108,9 @@ impl AgentVault {
         min_strategy_amount: U256,
     ) {
         self.owner.set(owner);
-        self.agent.set(agent);
+        // Register owner and initial agent as authorized agents (multi-agent support)
+        self.agents.set(&owner, true);
+        self.agents.set(&agent, true);
         self.paused.set(false);
         self.total_assets.set(U256::zero());
         self.total_strategies.set(0u64);
@@ -124,8 +126,23 @@ impl AgentVault {
         self.owner.get().unwrap_or_else(zero_address)
     }
 
-    pub fn agent(&self) -> Address {
-        self.agent.get().unwrap_or_else(zero_address)
+    /// Check if an address is an authorized agent
+    pub fn is_agent(&self, agent: Address) -> bool {
+        self.agents.get(&agent).unwrap_or(false)
+    }
+
+    /// Register a new agent (owner only)
+    pub fn register_agent(&mut self, agent: Address) {
+        self.only_owner();
+        self.agents.set(&agent, true);
+        self.env().emit_event(AgentRegistered { agent });
+    }
+
+    /// Unregister an agent (owner only)
+    pub fn unregister_agent(&mut self, agent: Address) {
+        self.only_owner();
+        self.agents.set(&agent, false);
+        self.env().emit_event(AgentUnregistered { agent });
     }
 
     pub fn paused(&self) -> bool {
@@ -146,12 +163,6 @@ impl AgentVault {
         self.owner.set(caller);
         self.pending_owner.set(zero_address());
         self.env().emit_event(OwnershipTransferred { from: prev, to: caller });
-    }
-
-    pub fn set_agent(&mut self, new_agent: Address) {
-        self.only_owner();
-        self.agent.set(new_agent);
-        self.env().emit_event(AgentUpdated { new_agent });
     }
 
     pub fn set_paused(&mut self, paused: bool) {
@@ -256,7 +267,7 @@ impl AgentVault {
         let caller = self.env().caller();
         require!(
             self.env(),
-            caller == self.agent.get().unwrap_or_else(zero_address),
+            self.is_agent(caller),
             "Only registered agent"
         );
         require!(
@@ -408,8 +419,13 @@ pub struct OwnershipTransferred {
 }
 
 #[odra::event]
-pub struct AgentUpdated {
-    pub new_agent: Address,
+pub struct AgentRegistered {
+    pub agent: Address,
+}
+
+#[odra::event]
+pub struct AgentUnregistered {
+    pub agent: Address,
 }
 
 #[odra::event]
@@ -437,7 +453,8 @@ mod tests {
         };
         let v = AgentVault::try_deploy(&env, init_args).expect("deploy");
         assert_eq!(v.owner(), owner);
-        assert_eq!(v.agent(), agent);
+        assert!(v.is_agent(owner));
+        assert!(v.is_agent(agent));
         assert_eq!(v.get_total_strategies(), U64::zero());
         assert_eq!(v.get_total_assets(), U256::zero());
     }
