@@ -1,10 +1,14 @@
-# ParkFlow Agent — Casper Agentic Buildathon 2026
+# ParkFlow Agent — Casper Agentic Buildathon 2026 — v0.8.0
 
 > **Autonomous multi-agent system that picks up on-chain RWA revenue
 > events, pays for a premium off-chain signal via the [x402][x402]
 > micropayment protocol, routes the proceeds through the CSPR.trade
 > DEX (via MCP), and logs every decision to an on-chain **AgentVault**
 > for verifiable reputation.**
+>
+> **v0.8.0**: Full pipeline working on Casper 2.0 testnet — swap execution
+> + vault logging via TransactionV1 format. Self-hosted CSPR.trade MCP
+> integration. Multi-agent contract support.
 
 [![Caspar 2.0 testnet](https://img.shields.io/badge/Caspar_2.0-testnet-FF6B6B?logo=casper&logoColor=white)](https://testnet.cspr.live)
 [![Odra 2.7](https://img.shields.io/badge/Odra-2.7-5B21B6?logo=rust&logoColor=white)](https://odra.dev)
@@ -311,48 +315,29 @@ parkflow-agent/
 ### 1. Clone & configure
 
 ```bash
-git clone <this-repo> parkflow-agent
-cd parkflow-agent
-cp .env.example agent/.env
-# then edit agent/.env → set CSPR_CLOUD_API_KEY
-```
-
-### 2. Generate & fund the agent key
-
-```bash
-cd agent
-mkdir -p keys
-# Option A: use the Casper CLI (any 2.x works)
-casper-client keygen keys/agent.pem
-# Option B: any EC private key, save as PEM
-```
-
-Then **fund the printed public key** at:
-<https://testnet.cspr.live/tools/faucet>
-
-You'll need **~600 CSPR** (2 deploys × 290 CSPR) + some for executor
-calls (~3 CSPR each).
-
-### 3. Build & deploy the contracts
-
-```bash
-cd ../contracts/odra
-cargo +nightly-2025-01-15 odra build
-cd ../../agent
+git clone https://github.com/antidumpalways/ParkFlow-Agent parkflow-agent
+cd parkflow-agent/agent
+cp .env.example .env
+# edit .env → set CSPR_CLOUD_API_KEY
 npm install
-npm run deploy
 ```
 
-`npm run deploy` will:
+### 2. Run setup (one command)
 
-1. Run `cargo +nightly-2025-01-15 odra build` (skippable with `--skip-build`)
-2. Submit two deploy transactions (RevenueEmitter + AgentVault) with
-   `init(...)` args inline
-3. Extract the **package hashes** from the deploy effects
-4. Overwrite `.env.local` with `REVENUE_EMITTER_CONTRACT_HASH=…` and
-   `AGENT_VAULT_CONTRACT_HASH=…`
+```bash
+npm run setup
+```
 
-### 4. Run the demo (3 terminals)
+This will:
+1. Load your agent key (or generate a new one)
+2. Check your testnet balance
+3. Deploy both contracts (RevenueEmitter + AgentVault)
+4. Register the agent with the vault (multi-agent support)
+5. Write contract hashes to `.env`
+
+> **Prerequisites**: A funded testnet account (~600 CSPR). Get testnet CSPR from the faucet.
+
+### 3. Run the demo (3 terminals)
 
 ```bash
 # terminal 1 — x402 signal server (:4001)
@@ -384,19 +369,23 @@ npm run cycle
 
 ## 🌐 Live deploy hashes (Casper 2.0 Testnet)
 
-> Recorded 2026-06-08 from the agent's deploy run.
+> Recorded 2026-06-13 from the latest `npm run setup` deploy.
 
-| Contract        | Package hash                                                          | Gas used  | Deploy tx                                                             |
-|-----------------|-----------------------------------------------------------------------|-----------|-----------------------------------------------------------------------|
-| RevenueEmitter  | `hash-1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f` | 247.7 CSPR | `hash-b7e5da71202af781e3fb2e74355c48fa2bfa110d4556ed7ecef9f79a7d58c5ac` |
-| AgentVault      | `hash-8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d` | 275.2 CSPR | `hash-bafd87e9c94cb03f21068eb2d6620780632dc0cbe236abc101b43c98a7b33d24` |
-| ParkFlow Token (PFLOW) | `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775` | 331 CSPR | `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca` |
-| cep18 test helper | `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fb716b5a8` | 81 CSPR  | `47f137e774ee6445342fa814775836ed815227c63d928082b8164af4e094ccea` |
+| Contract        | Package hash                                                          | Gas used  |
+|-----------------|-----------------------------------------------------------------------|-----------|
+| RevenueEmitter  | `hash-f7b8c3943c72cb4b8d44262a03776058da313ce1c9165146b1a2e372157bc102` | ~250 CSPR |
+| AgentVault      | `hash-5ba747dfbf3a6769a79db63198c1c414b85bae1b407777cbc56d53c208ec09a6` | ~290 CSPR |
+| Test swap tx    | `28eb60e32aedb59fd532e2faca44e8f908603ac30ac196faf44da2eabaad390c` | ~30 CSPR |
+| Test vault log  | `2ffe74e12a33ceb1bf74d8a3840b9e08fb9c41d960be0da6f8df19d30789beed` | ~3 CSPR |
 
-View on CSPR.live:
+### Previous deploys (archived)
 
-- RevenueEmitter → <https://testnet.cspr.live/deploy/1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f>
-- AgentVault → <https://testnet.cspr.live/deploy/8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d>
+| Contract        | Package hash                                                          | Deploy tx                                                             |
+|-----------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|
+| RevenueEmitter (v0.7) | `hash-1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f` | `hash-b7e5da71202af781e3fb2e74355c48fa2bfa110d4556ed7ecef9f79a7d58c5ac` |
+| AgentVault (v0.7)     | `hash-8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d` | `hash-bafd87e9c94cb03f21068eb2d6620780632dc0cbe236abc101b43c98a7b33d24` |
+| ParkFlow Token (PFLOW) | `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775` | `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca` |
+| cep18 test helper | `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fbcf716b5a8` | `47f137e774ee6445342fa814775836ed815227c63d928082b8164af4e094ccea` |
 
 ---
 
@@ -542,6 +531,11 @@ of IoT sources they watch.
 | LLM strategy | 🟡 Code path is real (Anthropic + OpenAI supported), demo runs the deterministic heuristic |
 | CEP-18 token | 🟡 Zero address placeholder — production needs a real CEP-18 contract for non-native assets |
 | CSPR.cloud facilitator | 🟡 Client implemented, demo uses local settlement (allowlist + nonce) |
+| Self-hosted CSPR.trade MCP | ✅ Working on testnet via `http://localhost:3001/mcp` (v0.8.0) |
+| TransactionV1 swap execution | ✅ Full on-chain swap via `account_put_transaction` RPC (v0.8.0) |
+| TransactionV1 vault logging | ✅ `ContractCallBuilder` → TransactionV1 → on-chain (v0.8.0) |
+| Multi-agent contract | ✅ `register_agent()`, `unregister_agent()`, `is_agent()` (v0.8.0) |
+| Setup script | ✅ `npm run setup` - auto deploy + register (v0.8.0) |
 
 ### Production gaps, and what it would take to close them
 
