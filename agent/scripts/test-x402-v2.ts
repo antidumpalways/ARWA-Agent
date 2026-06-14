@@ -1,7 +1,7 @@
 /**
  * End-to-end x402 v2 test: agent requests a paid forecast from the local
  * x402-server, signs the EIP-712 typed data with its Casper key, then verifies
- * the returned forecast. Uses real PFLOW as the payment asset.
+ * the returned forecast. Uses real CSPR as the payment asset.
  *
  * Note: server-side locally verifies the signature (and forwards to the
  * CSPR.cloud x402 facilitator for on-chain settlement). When the facilitator
@@ -20,8 +20,8 @@ import { readFileSync } from 'fs';
   console.log('Agent pem:   ', cfg.AGENT_SECRET_KEY_PATH);
   console.log('PEM bytes:   ', readFileSync(cfg.AGENT_SECRET_KEY_PATH, 'utf-8').length);
 
-  // 1) Pre-check: agent has PFLOW
-  console.log('\n--- Pre-check PFLOW balance ---');
+  // 1) Pre-check: agent has CSPR
+  console.log('\n--- Pre-check CSPR balance ---');
   const totalSupply = await getCep18TotalSupply();
   const balance = await getAgentCep18Balance(getAgentKeys().publicKey.accountHash().toHex());
   console.log('Total supply:', totalSupply);
@@ -41,7 +41,7 @@ import { readFileSync } from 'fs';
     console.log('signedAt:', new Date(r.proof.signedAt * 1000).toISOString());
 
     // 3) Post-check
-    console.log('\n--- Post-check PFLOW balance ---');
+    console.log('\n--- Post-check CSPR balance ---');
     const balance2 = await getAgentCep18Balance(getAgentKeys().publicKey.accountHash().toHex());
     console.log('Agent balance:', balance2);
   } catch (e: any) {

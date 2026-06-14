@@ -3,7 +3,7 @@
  *
  * Use this if you deployed via the casper client / casper-js-sdk / web UI
  * (rather than `npm run deploy`) and want to wire the hashes into the
- * ParkFlow Agent's env.
+ * ARWA Agent's env.
  *
  * Usage:
  *   npm run record -- --revenue=hash-abc --vault=hash-def

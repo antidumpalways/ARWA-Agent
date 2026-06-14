@@ -121,8 +121,8 @@ async function main() {
       throw new Error(`cep18.wasm not found at ${tokenPath}. Build it first.`);
     }
     const tokenArgs: Record<string, { clType: string; value: any }> = {
-      name:         { clType: 'string', value: 'ParkFlow Token' },
-      symbol:       { clType: 'string', value: 'PFLOW' },
+      name:         { clType: 'string', value: 'ARWA Token' },
+      symbol:       { clType: 'string', value: 'ARWA' },
       decimals:     { clType: 'u8',     value: '9' },
       total_supply: { clType: 'u256',   value: args.supply },
     };

@@ -9,7 +9,7 @@ describe('x402 v2 payment requirements', () => {
       amount: '1000000',
       asset: 'a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775',
       maxTimeoutSeconds: 600,
-      extra: { name: 'ParkFlow', version: '1', decimals: '9', symbol: 'PFLOW' },
+      extra: { name: 'ARWA', version: '1', decimals: '9', symbol: 'CSPR' },
     };
     const b64 = Buffer.from(JSON.stringify(reqs), 'utf-8').toString('base64');
     const parsed = parsePaymentRequirements(b64);
