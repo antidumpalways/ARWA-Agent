@@ -40,7 +40,7 @@ interface LLMStrategyOutput {
   confidence: number;
 }
 
-const SYSTEM_PROMPT = `You are an autonomous DeFi strategist for the ParkFlow
+const SYSTEM_PROMPT = `You are an autonomous DeFi strategist for the ARWA
 Agent on Casper. Given a revenue event, an x402-paid utilization signal, an
 on-chain DEX quote, and the current portfolio, output a single JSON
 strategy decision. Output ONLY valid JSON matching the schema below. No

@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — main orchestration.
+ * ARWA — main orchestration.
  *
  * RevenueEvent → Analyst (MCP + x402) → StrategyProposal → Executor
  * (build deploy via MCP, sign, submit, log to AgentVault) → emit cycle result.

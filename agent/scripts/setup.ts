@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent - Complete Setup Script
+ * ARWA - Complete Setup Script
  * 
  * This script handles:
  * 1. Generate agent key (if not exists)
@@ -41,7 +41,7 @@ const GAS_LIMITS = {
 };
 
 async function main() {
-  console.log('🚀 ParkFlow Agent Setup\n');
+  console.log('🚀 ARWA Setup\n');
 
   // Step 1: Check/generate key
   console.log('📋 Step 1: Agent Key');
@@ -221,7 +221,7 @@ async function deployContract(
   argsMap['odra_cfg_is_upgrade'] = { clType: 'bool', value: 'false' };
   argsMap['odra_cfg_package_hash_key_name'] = { 
     clType: 'string', 
-    value: `parkflow_${accountHash.slice(0, 8)}_${contractName}` 
+    value: `ARWA_${accountHash.slice(0, 8)}_${contractName}` 
   };
   argsMap['odra_cfg_allow_key_override'] = { clType: 'bool', value: 'true' };
   argsMap['odra_cfg_is_upgradable'] = { clType: 'bool', value: 'true' };

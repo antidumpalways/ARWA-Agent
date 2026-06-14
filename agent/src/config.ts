@@ -28,7 +28,7 @@ const EnvSchema = z.object({
 
   // x402
   X402_FACILITATOR_URL: z.string().url().default('https://x402-facilitator.cspr.cloud'),
-  X402_SIGNAL_ENDPOINT: z.string().url().default('https://signals.parkflow.example.com/utilization'),
+  X402_SIGNAL_ENDPOINT: z.string().url().default('https://signals.ARWA.example.com/utilization'),
   X402_CEP18_PACKAGE_HASH: z.string().optional(),
   X402_CEP18_ASSET_NAME: z.string().default('USDC').optional(),
   CEP18_UTIL_QUERY_HASH: z.string().optional(),

@@ -1,4 +1,4 @@
-// Shared types for ParkFlow Agent
+// Shared types for ARWA
 
 export interface RevenueEvent {
   timestamp: number;

@@ -74,7 +74,7 @@ function specFor(contract: string, ownerHex: string): DeploySpec {
   // Odra's macro reads them by Rust parameter name (not by `arg0/arg1/…`).
   const cfgArgs = [
     { name: 'odra_cfg_is_upgrade',            clType: 'bool',   value: 'false' },
-    { name: 'odra_cfg_package_hash_key_name', clType: 'string', value: 'parkflow_' + contractName(ownerHex) + '_' + contract },
+    { name: 'odra_cfg_package_hash_key_name', clType: 'string', value: 'ARWA_' + contractName(ownerHex) + '_' + contract },
     { name: 'odra_cfg_allow_key_override',    clType: 'bool',   value: 'true' },
     { name: 'odra_cfg_is_upgradable',         clType: 'bool',   value: 'true' },
   ];

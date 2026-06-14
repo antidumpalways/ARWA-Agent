@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — live end-to-end demo.
+ * ARWA — live end-to-end demo.
  *
  * Bypasses CSPR.cloud REST (DNS-flaky in sandbox) and uses the Casper RPC
  * directly. Exercises:
@@ -43,7 +43,7 @@ function heuristicDecision(signal: any, amountIn: string): DemoDecision {
 
 async function main() {
   const cfg = loadConfig();
-  console.log('═══ ParkFlow Agent — live end-to-end demo ═══\n');
+  console.log('═══ ARWA — live end-to-end demo ═══\n');
   console.log('Network:    ', cfg.CASPER_NETWORK);
   console.log('RPC:        ', cfg.CASPER_RPC_URL);
   console.log('AgentVault: ', cfg.AGENT_VAULT_CONTRACT_HASH);

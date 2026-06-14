@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — quickstart checker.
+ * ARWA — quickstart checker.
  *
  * Runs the verify script in non-strict mode and prints a one-shot checklist
  * of the remaining steps to go from "fresh checkout" to "demo-ready".
@@ -58,7 +58,7 @@ function run(cmd: string): { ok: boolean; out: string } {
 }
 
 line('');
-line(`${BOLD}ParkFlow Agent — quickstart checklist${RESET}`);
+line(`${BOLD}ARWA — quickstart checklist${RESET}`);
 
 head('Local prerequisites');
 for (const c of CHECKS) {

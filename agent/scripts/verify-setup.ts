@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — pre-flight setup verifier.
+ * ARWA — pre-flight setup verifier.
  *
  * Checks every external dependency the agent needs at runtime and prints a
  * checklist. Exits with non-zero if anything is wrong.
@@ -219,7 +219,7 @@ async function main() {
   await checkCsprCloudStreaming();
   await checkX402Facilitator();
 
-  console.log('\nParkFlow Agent — pre-flight check\n');
+  console.log('\nARWA — pre-flight check\n');
   let okCount = 0;
   let warnCount = 0;
   let failCount = 0;

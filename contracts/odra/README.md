@@ -1,4 +1,4 @@
-# Odra Contracts — ParkFlow Agent
+# Odra Contracts — ARWA
 
 Two contracts deployed to Casper Testnet via `cargo odra`.
 

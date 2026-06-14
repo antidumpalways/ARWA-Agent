@@ -9,7 +9,7 @@
 //!   * EIP-712 style x402 proof recorded + (optional) recovered signer
 //!   * Iteratable depositor list (parallel Vec<Address>)
 //!
-//! For ParkFlow Agent - Casper Buildathon 2026.
+//! For ARWA - Casper Buildathon 2026.
 
 use odra::prelude::*;
 use odra::uints::{ToU256, ToU512};

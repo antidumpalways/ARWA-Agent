@@ -27,7 +27,7 @@ export async function getCasperMcp(): Promise<Client> {
       },
     });
     const client = new Client(
-      { name: 'parkflow-agent', version: '0.2.0' },
+      { name: 'ARWA-agent', version: '0.2.0' },
       { capabilities: {} }
     );
     await client.connect(transport);

@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — Parking Lot Revenue Simulator (one-shot).
+ * ARWA — Parking Lot Revenue Simulator (one-shot).
  *
  * Simulates vehicles exiting a parking lot, converts the fiat fee
  * (USD by default) to motes, computes a SHA-256 receipt hash for
@@ -74,7 +74,7 @@ function computeCostUsd(durationMin: number, hourlyUsd: number): number {
 
 function computeReceiptHash(plat: string, exitTime: number, costUsd: number): string {
   return createHash('sha256')
-    .update(`parkflow|${plat}|${exitTime}|${costUsd.toFixed(2)}`)
+    .update(`ARWA|${plat}|${exitTime}|${costUsd.toFixed(2)}`)
     .digest('hex');
 }
 
@@ -132,7 +132,7 @@ async function main() {
     throw new Error('REVENUE_EMITTER_CONTRACT_HASH not set in .env. Run `npm run deploy` first.');
   }
 
-  console.log('═══ ParkFlow Simulator — Parking Lot Revenue ═══\n');
+  console.log('═══ ARWA Simulator — Parking Lot Revenue ═══\n');
   console.log(`Contract:    ${cfg.REVENUE_EMITTER_CONTRACT_HASH}`);
   console.log(`Network:     ${cfg.CASPER_NETWORK}`);
   console.log(`Events:      ${args.count}`);

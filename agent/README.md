@@ -1,4 +1,4 @@
-# ParkFlow Agent (Node)
+# ARWA (Node)
 
 TypeScript agents + backend bridge for Casper. Replaces the original mock
 implementation with real MCP, x402, and on-chain Casper SDK integrations.

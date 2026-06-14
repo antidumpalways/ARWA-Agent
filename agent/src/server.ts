@@ -1,5 +1,5 @@
 /**
- * ParkFlow backend — bridges the static frontend to the agent runner.
+ * ARWA backend — bridges the static frontend to the agent runner.
  *
  * Endpoints:
  *   GET  /api/health          → { ok, network, contracts, apiKey, ws }

@@ -18,7 +18,7 @@
  * and uses the standard casper-js-sdk SSE event types
  * (ApiVersion, BlockAdded, DeployProcessed, DeployAccepted, ...).
  *
- * Stream catalogue used by ParkFlow:
+ * Stream catalogue used by ARWA:
  *   - "Contract-level events"  action: "emitted"  → CES events
  *   - "Deploy"                 action: "created"  → new deploys
  *   - "Account balance"        action: "updated"  → balance changes
@@ -233,7 +233,7 @@ export function subscribeSSE(
 }
 
 // ============================================================================
-// High-level filters for ParkFlow
+// High-level filters for ARWA
 // ============================================================================
 
 /**

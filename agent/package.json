@@ -1,5 +1,5 @@
 {
-  "name": "parkflow-agent",
+  "name": "ARWA-agent",
   "version": "0.7.0",
   "description": "Autonomous RWA yield agent for Casper — Analyst + Executor with real MCP, x402, CSPR.cloud REST/Streaming, and on-chain AgentVault integration.",
   "main": "dist/index.js",

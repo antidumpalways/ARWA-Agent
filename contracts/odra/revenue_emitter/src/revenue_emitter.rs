@@ -4,7 +4,7 @@
 //! that aggregates real-world cashflow data) or the contract `owner` may push
 //! events. Anyone can read recent events.
 //!
-//! For Casper Agentic Buildathon 2026 - ParkFlow Agent.
+//! For Casper Agentic Buildathon 2026 - ARWA.
 
 use odra::prelude::*;
 use odra::casper_types::U256;

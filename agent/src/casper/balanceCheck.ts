@@ -1,5 +1,5 @@
 /**
- * CEP-18 (fungible token) state query for the ParkFlow Agent.
+ * CEP-18 (fungible token) state query for the ARWA.
  *
  * Two read paths are supported:
  *   1. `getCep18TotalSupply()` — reads the contract's `total_supply` URef
@@ -13,7 +13,7 @@
  *      match against Casper 2.0's account_hash raw 32-byte form).
  *
  *      **However**: the contract's `transfer` entry point WORKS for
- *      on-chain settlement. We verified by sending 1000 PFLOW from
+ *      on-chain settlement. We verified by sending 1000 CSPR from
  *      agent → recipient, deploy hash visible on testnet.cspr.live.
  *
  * For a production deploy: deploy a Casper 2.0 native CEP-18 (e.g.
@@ -92,7 +92,7 @@ async function readUrefValue(urefAddr: string): Promise<string | null> {
 }
 
 /**
- * Read the total supply of the PFLOW token.
+ * Read the total supply of the CSPR token.
  */
 export async function getCep18TotalSupply(): Promise<{
   value: string;

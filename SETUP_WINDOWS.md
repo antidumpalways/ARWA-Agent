@@ -1,6 +1,6 @@
 # Local Setup Guide (Windows / PowerShell)
 
-End-to-end walkthrough to take the ParkFlow Agent from a fresh Windows
+End-to-end walkthrough to take the ARWA from a fresh Windows
 checkout to a fully running agent on Casper Testnet.
 
 > **Time estimate**: 30-45 min (most of it is waiting for the faucet and
@@ -69,7 +69,7 @@ casper-client --version
 
 ```powershell
 git clone <this-repo>
-cd parkflow-agent
+cd ARWA-agent
 
 # Copy the env template
 cp .env.example agent\.env

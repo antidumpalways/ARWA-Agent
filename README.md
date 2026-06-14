@@ -1,4 +1,4 @@
-# ParkFlow Agent — Casper Agentic Buildathon 2026 — v0.8.0
+# ARWA — Casper Agentic Buildathon 2026 — v0.8.0
 
 > **Autonomous multi-agent system that picks up on-chain RWA revenue
 > events, pays for a premium off-chain signal via the [x402][x402]
@@ -43,7 +43,7 @@
 
 Every time a real-world revenue tick fires for an RWA (e.g. a parking lot,
 a rental property, a royalty stream), the **RevenueEmitter** contract
-pushes a `RevenueEmitted` event on-chain. The ParkFlow agent swarm
+pushes a `RevenueEmitted` event on-chain. The ARWA swarm
 picks it up and runs a fully-autonomous decision loop:
 
 1. **Analyst** reads the on-chain event, fetches the agent's live
@@ -70,8 +70,8 @@ sequenceDiagram
     autonumber
     actor Operator as Demo Operator
     participant FE as Frontend<br/>(CSPR.click)
-    participant API as ParkFlow Backend<br/>(:4000)
-    participant Agent as ParkFlow Agent<br/>(Node)
+    participant API as ARWA Backend<br/>(:4000)
+    participant Agent as ARWA<br/>(Node)
     participant Chain as Casper Testnet
     participant Signal as x402 Signal<br/>(:4001)
     participant MCP as CSPR.cloud<br/>+ CSPR.trade MCP
@@ -241,7 +241,7 @@ graph LR
 ## 📁 Repository layout
 
 ```
-parkflow-agent/
+ARWA-agent/
 ├── contracts/odra/             Odra 2.7 smart contracts (Rust → Wasm)
 │   ├── Odra.toml               workspace + per-network config
 │   ├── Cargo.toml              workspace
@@ -320,8 +320,8 @@ parkflow-agent/
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/antidumpalways/ParkFlow-Agent parkflow-agent
-cd parkflow-agent/agent
+git clone https://github.com/antidumpalways/ARWA-Agent ARWA-agent
+cd ARWA-agent/agent
 cp .env.example .env
 # edit .env → set CSPR_CLOUD_API_KEY
 npm install
@@ -349,7 +349,7 @@ This will:
 cd agent
 npm run x402-server
 
-# terminal 2 — ParkFlow backend + SSE feed (:4000)
+# terminal 2 — ARWA backend + SSE feed (:4000)
 cd agent
 npm run dev
 
@@ -389,7 +389,7 @@ npm run cycle
 |-----------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------|
 | RevenueEmitter (v0.7) | `hash-1271383d93f1b16e9b86f9b96d21ee9e5e673d529a47425cfd675b52f29d6f2f` | `hash-b7e5da71202af781e3fb2e74355c48fa2bfa110d4556ed7ecef9f79a7d58c5ac` |
 | AgentVault (v0.7)     | `hash-8c7015e0d95fc13495a1921977b9d7f8fd824cb2534ec3438a43872ae6769b6d` | `hash-bafd87e9c94cb03f21068eb2d6620780632dc0cbe236abc101b43c98a7b33d24` |
-| ParkFlow Token (PFLOW) | `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775` | `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca` |
+| ARWA Token (CSPR) | `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775` | `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca` |
 | cep18 test helper | `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fbcf716b5a8` | `47f137e774ee6445342fa814775836ed815227c63d928082b8164af4e094ccea` |
 
 ---
@@ -421,7 +421,7 @@ Today this doesn't happen because:
 
 ### The solution
 
-ParkFlow Agent turns each parking transaction into an
+ARWA turns each parking transaction into an
 **immutable, privacy-preserving, on-chain record** that a
 yield strategy can act on, end-to-end, without a human:
 
@@ -505,7 +505,7 @@ No contract change is needed. The same deployed
                                   │  events
                                   ▼
                      ┌────────────────────────┐
-                     │  ParkFlow Agent (Node) │  (one agent
+                     │  ARWA (Node) │  (one agent
                      │  reads events           │   per operator)
                      │  pays x402              │
                      │  decides strategy       │
@@ -555,13 +555,13 @@ of IoT sources they watch.
    needs sponsored facilitator access — the code path is in
    place. See `scripts/x402Server.ts:forwardToFacilitator`.
 2. **Real CEP-18 token** — *closed in v0.7.0.* Our own
-   `ParkFlow Token` (PFLOW, 9 decimals, 100M supply) is now
+   `ARWA Token` (CSPR, 9 decimals, 100M supply) is now
    **deployed and initialized live on Casper 2.0 testnet**:
    - Package: `hash-a786a295384b6f39b6d62a97e12af776642253b37167f2a6c9b9410e8c93c775`
    - Contract: `hash-df768f7ea6578a0e4b3d93aceb7a36051618a470b01dab438cb67f6d93667e0d`
    - Deploy tx: `ff3dd339fed880dd86070ce75ab4099e0be654cf7944ef6fd1849b117411c3ca`
    - Test helper: `hash-2cb326523f4ffba70f9ad7951a0e66bfc8f41d804ae1b7db0d793fbcf716b5a8`
-   - **Real on-chain transfer** (v0.7.0): 1000 PFLOW agent → recipient,
+   - **Real on-chain transfer** (v0.7.0): 1000 CSPR agent → recipient,
      tx `44ae351b41997d493fa1953f73a69ca6d8581b9bcba23b8209e99c5586cb37cd`
 
    Both hashes are written to `.env` automatically by
@@ -572,12 +572,12 @@ of IoT sources they watch.
    toolchain and `-Z build-std=std,panic_abort`.
 
    `getCep18TotalSupply()` in `src/casper/balanceCheck.ts`
-   **fully works** — reads 100,000,000 PFLOW on-chain.
+   **fully works** — reads 100,000,000 CSPR on-chain.
    `getAgentCep18Balance()` works as a **total-supply proxy**
    due to the cep18 v1.2.0 dictionary item-key encoding
    (Casper 1.x era). The contract's `transfer` entry point
    **fully works** for on-chain settlement (we verified with
-   a real 1000 PFLOW transfer). A Casper 2.0 native CEP-18
+   a real 1000 CSPR transfer). A Casper 2.0 native CEP-18
    (Odra 2.7) would close the per-account read path.
 3. **Persistence for nonces and forecasts** — the in-memory
    `Set` and event log would be replaced by Redis or SQLite.

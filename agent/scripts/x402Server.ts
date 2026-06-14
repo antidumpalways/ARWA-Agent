@@ -1,5 +1,5 @@
 /**
- * ParkFlow Agent — x402 v2 signal server.
+ * ARWA — x402 v2 signal server.
  *
  * Implements the official x402 protocol (https://x402.org) for Casper.
  * Forward all payments to CSPR.cloud x402 facilitator for verify+settle.
@@ -409,7 +409,7 @@ async function computeForecast(lotId: string): Promise<any> {
       source_count: 0,
       last_24h_count: 0,
       total_revenue_motes: '0',
-      model: 'parkflow-v1-aggregate',
+      model: 'ARWA-v1-aggregate',
       valid_for_seconds: 300,
     };
   }
@@ -428,7 +428,7 @@ async function computeForecast(lotId: string): Promise<any> {
     source_count: matching.length,
     last_24h_count: last24h.length,
     total_revenue_motes: totalMotes.toString(),
-    model: 'parkflow-v1-aggregate',
+    model: 'ARWA-v1-aggregate',
     valid_for_seconds: 300,
   };
 }

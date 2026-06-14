@@ -35,7 +35,7 @@ let cachedBlock: { ts: number; events: RevenueEvent[] } | null = null;
  * Get recent emit_revenue deploys by scanning the last N blocks via
  * `chain_get_block_transfers` and checking each block for our agent's
  * deploys. Simpler alternative: maintain a local rolling log of
- * simulator outputs in `agent/.parkflow-events.json`.
+ * simulator outputs in `agent/.ARWA-events.json`.
  */
 export async function getRecentEventsDirect(limit = 20): Promise<RevenueEvent[]> {
   if (cachedBlock && Date.now() - cachedBlock.ts < 5000) {
@@ -49,7 +49,7 @@ export async function getRecentEventsDirect(limit = 20): Promise<RevenueEvent[]>
   try {
     const fs = await import('fs');
     const path = await import('path');
-    const logPath = path.join(__dirname, '..', '..', '.parkflow-events.json');
+    const logPath = path.join(__dirname, '..', '..', '.ARWA-events.json');
     if (fs.existsSync(logPath)) {
       const events = JSON.parse(fs.readFileSync(logPath, 'utf-8')) as RevenueEvent[];
       cachedBlock = { ts: Date.now(), events };
@@ -71,7 +71,7 @@ export function recordEventLocal(ev: RevenueEvent): void {
   try {
     const fs = require('fs') as typeof import('fs');
     const path = require('path') as typeof import('path');
-    const logPath = path.join(__dirname, '..', '..', '.parkflow-events.json');
+    const logPath = path.join(__dirname, '..', '..', '.ARWA-events.json');
     let arr: RevenueEvent[] = [];
     if (fs.existsSync(logPath)) {
       arr = JSON.parse(fs.readFileSync(logPath, 'utf-8'));
