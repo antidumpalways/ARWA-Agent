@@ -27,7 +27,7 @@ export async function getCasperMcp(): Promise<Client> {
       },
     });
     const client = new Client(
-      { name: 'ARWA-agent', version: '0.2.0' },
+      { name: 'arwa-agent', version: '0.8.0' },
       { capabilities: {} }
     );
     await client.connect(transport);

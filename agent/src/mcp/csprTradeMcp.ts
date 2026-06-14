@@ -26,7 +26,7 @@ export async function getCsprTradeMcp(): Promise<Client> {
     // CSPR.trade MCP standalone (mainnet only, no auth required)
     const transport = new StreamableHTTPClientTransport(new URL(cfg.CSPR_TRADE_MCP_URL));
     const client = new Client(
-      { name: 'ARWA-executor', version: '0.2.0' },
+      { name: 'arwa-executor', version: '0.8.0' },
       { capabilities: {} }
     );
     await client.connect(transport);

@@ -1,7 +1,7 @@
 {
-  "name": "ARWA-agent",
-  "version": "0.7.0",
-  "description": "Autonomous RWA yield agent for Casper — Analyst + Executor with real MCP, x402, CSPR.cloud REST/Streaming, and on-chain AgentVault integration.",
+  "name": "arwa",
+  "version": "0.8.0",
+  "description": "ARWA — Agentic Real-World Assets. Autonomous multi-agent RWA yield optimizer on Casper: Analyst + Executor with self-hosted CSPR.trade MCP, x402 micropayments, and on-chain AgentVault for verifiable reputation.",
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {
