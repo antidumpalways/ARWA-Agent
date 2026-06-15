@@ -1,473 +1,403 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ARWA — Casper Buildathon 2026</title>
-  <style>
-    @font-face { font-family: 'Caspersans'; src: local('Caspersans'), local('Casper-Sans-Bold'); font-weight: 700; font-display: swap; }
-    @font-face { font-family: 'Casper Sans'; src: local('Casper Sans'), local('Casper-Sans-Regular'); font-weight: 400 500; font-display: swap; }
-    :root {
-      --color-primary: #B11F20;
-      --color-secondary: #DAD168;
-      --color-alert: #FF2D2D;
-      --color-bg: #FFFFFF;
-      --color-surface: #FFFFFF;
-      --color-text: #1A1A1A;
-      --color-text-muted: #6B5D52;
-      --color-border: #E5DDD0;
-      --color-border-strong: #B7A99A;
-      --color-bg-soft: #FAF7F2;
-      --font-headline: 'Caspersans', 'Inter', system-ui, -apple-system, sans-serif;
-      --font-body: 'Casper Sans', 'Inter', system-ui, -apple-system, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; font-family: var(--font-body); background: var(--color-bg); color: var(--color-text); font-size: 14px; line-height: 1.5; }
-    h1, h2, h3, h4 { font-family: var(--font-headline); font-weight: 700; margin: 0; }
-
-    /* ========== LANDING PAGE ========== */
-    #landing {
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      text-align: center; padding: 40px 20px;
-      background: linear-gradient(180deg, #FAF7F2 0%, #FFFFFF 100%);
-    }
-    #landing .hero-logo {
-      width: 120px; height: 120px;
-      background: var(--color-primary);
-      color: #FFFFFF;
-      display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-headline); font-size: 56px; font-weight: 700;
-      border-radius: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(177, 31, 32, 0.2);
-    }
-    #landing h1 { font-size: 42px; line-height: 1.1; margin-bottom: 12px; }
-    #landing h1 span { color: var(--color-primary); }
-    #landing .subtitle { font-size: 18px; color: var(--color-text-muted); max-width: 600px; margin-bottom: 32px; }
-    #landing .features { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 800px; margin-bottom: 36px; }
-    #landing .feat {
-      background: var(--color-surface); border: 1px solid var(--color-border);
-      border-radius: 14px; padding: 20px; width: 220px; text-align: left;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    }
-    #landing .feat .icon { font-size: 28px; margin-bottom: 8px; }
-    #landing .feat h3 { font-size: 15px; margin-bottom: 4px; }
-    #landing .feat p { font-size: 12px; color: var(--color-text-muted); margin: 0; }
-    #btn-enter {
-      padding: 16px 40px; border: none; cursor: pointer;
-      background: var(--color-primary); color: #FFFFFF;
-      font-family: var(--font-headline); font-weight: 700; font-size: 16px;
-      border-radius: 14px; transition: transform .15s, box-shadow .2s;
-      box-shadow: 0 4px 16px rgba(177, 31, 32, 0.25);
-    }
-    #btn-enter:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(177, 31, 32, 0.35); }
-    .badge-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
-    .badge-row span {
-      padding: 6px 14px; border-radius: 999px;
-      font-size: 12px; font-family: var(--font-headline);
-      background: var(--color-bg-soft); border: 1px solid var(--color-border);
-      color: var(--color-text-muted);
-    }
-    .badge-row .live { background: rgba(218,209,104,0.3); color: #4a4520; border-color: var(--color-secondary); }
-
-    /* ========== DASHBOARD ========== */
-    #dashboard { display: none; }
-    .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
-    .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 24px; border-bottom: 2px solid var(--color-primary); margin-bottom: 24px; }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-logo { width: 44px; height: 44px; background: var(--color-primary); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: var(--font-headline); font-size: 24px; font-weight: 700; border-radius: 12px; }
-    .brand-text h1 { font-size: 22px; line-height: 1; color: var(--color-text); }
-    .brand-text p { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12px; }
-    .header-actions { display: flex; align-items: center; gap: 12px; }
-    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-border); font-size: 12px; color: var(--color-text-muted); }
-    .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted); }
-    .pill.live .dot { background: #16a34a; animation: pulse 2s infinite; }
-    .pill.alert .dot { background: var(--color-alert); }
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; cursor: pointer; background: var(--color-primary); color: #FFFFFF; font-family: var(--font-headline); font-weight: 700; font-size: 13px; border-radius: 10px; transition: transform .1s, box-shadow .2s; }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(177, 31, 32, 0.2); }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-    .btn-ghost { background: transparent; color: var(--color-primary); border: 1px solid var(--color-primary); }
-    .grid { display: grid; gap: 16px; }
-    .grid-3 { grid-template-columns: 1fr; }
-    @media (min-width: 900px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
-    .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
-    .card h2 { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .card h2 .badge { background: var(--color-secondary); color: var(--color-text); padding: 2px 8px; border-radius: 999px; font-size: 10px; }
-    .label { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 1px; }
-    .value { font-family: var(--font-headline); font-size: 28px; line-height: 1.1; margin: 4px 0; }
-    .sub { font-size: 12px; color: var(--color-text-muted); }
-    .kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-    .kpi { flex: 1 1 90px; background: var(--color-bg-soft); border-radius: 10px; padding: 10px; }
-    .kpi .value { font-size: 20px; }
-    .gate-card { background: linear-gradient(135deg, var(--color-bg-soft), #FFFFFF); border: 1px dashed var(--color-border-strong); border-radius: 12px; padding: 16px; margin: 12px 0; }
-    .gate-row { display: flex; align-items: center; gap: 16px; }
-    .gate-icon { width: 64px; height: 64px; flex: 0 0 64px; background: var(--color-secondary); color: var(--color-text); display: flex; align-items: center; justify-content: center; font-size: 32px; border-radius: 50%; transition: transform .3s; }
-    .gate-icon.open { background: var(--color-primary); color: #FFFFFF; }
-    .gate-icon.open::after { content: '↑'; }
-    .gate-icon:not(.open)::after { content: '⛔'; }
-    .gate-info { flex: 1; }
-    .gate-info .value { font-size: 18px; margin: 2px 0; }
-    .queue { margin-top: 12px; font-size: 12px; }
-    .queue ul { list-style: none; padding: 0; margin: 0; }
-    .queue li { display: flex; justify-content: space-between; padding: 4px 8px; border-bottom: 1px dotted var(--color-border); }
-    .queue li:last-child { border-bottom: none; }
-    .queue .plat { font-family: monospace; font-weight: 500; }
-    .queue .status { color: var(--color-text-muted); font-size: 11px; }
-    .tx-card { background: var(--color-bg-soft); border-radius: 10px; padding: 12px; margin-top: 12px; }
-    .tx-card .row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
-    .tx-card .hash { font-family: monospace; font-size: 11px; color: var(--color-text-muted); word-break: break-all; }
-    .llm-bubble { background: var(--color-secondary); color: var(--color-text); padding: 14px 16px; border-radius: 14px 14px 14px 4px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; font-style: italic; }
-    .llm-meta { display: flex; gap: 8px; flex-wrap: wrap; }
-    .llm-meta .item { flex: 1 1 80px; background: var(--color-bg-soft); padding: 8px 10px; border-radius: 8px; }
-    .llm-meta .item .value { font-size: 14px; font-family: var(--font-headline); }
-    .x402-status { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; background: var(--color-bg-soft); border-radius: 8px; }
-    .x402-status .icon { font-size: 18px; }
-    .tx-list { margin-top: 8px; max-height: 200px; overflow-y: auto; }
-    .tx-list .row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dotted var(--color-border); font-size: 12px; }
-    .tx-list .row .left .action { font-weight: 600; }
-    .tx-list .row .left .pair { color: var(--color-text-muted); font-size: 11px; }
-    .tx-list .row .right { text-align: right; }
-    .tx-list .row .outcome { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
-    .tx-list .row .outcome.success { background: rgba(218, 209, 104, 0.3); color: #4a4520; }
-    .tx-list .row .outcome.reverted { background: rgba(255, 45, 45, 0.1); color: var(--color-alert); }
-    .tx-list .row .hash { font-family: monospace; font-size: 10px; color: var(--color-text-muted); }
-    .action-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
-    .input { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 8px; font-family: var(--font-body); font-size: 13px; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 11px; text-align: center; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    @keyframes slideIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .tx-card, .llm-bubble, .gate-card { animation: slideIn .3s ease-out; }
-    #btn-back { background: transparent; border: none; cursor: pointer; color: var(--color-text-muted); font-size: 13px; padding: 6px 10px; border-radius: 8px; }
-    #btn-back:hover { background: var(--color-bg-soft); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARWA — Agentic Real-World Assets on Casper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tacha: '#DAD168',
+                        terracotta: '#B11F20',
+                        arwaRed: '#E12E30',
+                        darkBg: '#05070F',
+                        cardBg: '#0D1224',
+                        borderGray: '#1E293B'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #05070F;
+            background-image: 
+                radial-gradient(circle at 80% 20%, rgba(225, 46, 48, 0.15) 0px, transparent 50%),
+                radial-gradient(circle at 20% 80%, rgba(218, 209, 104, 0.08) 0px, transparent 50%);
+            overflow-x: hidden;
+        }
+        @keyframes radar-pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { opacity: 0.4; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        .radar-ripple {
+            position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; border: 1px solid #DAD168;
+            animation: radar-pulse 2s infinite ease-out;
+        }
+        .glow-active-icon {
+            box-shadow: 0 0 15px 2px rgba(218, 209, 104, 0.25);
+            border-color: #DAD168 !important; color: #DAD168 !important;
+        }
+        .glow-active-number { box-shadow: 0 0 10px rgba(218, 209, 104, 0.5); }
+        .step-transition { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .text-glow-tacha { text-shadow: 0 0 8px rgba(218, 209, 104, 0.4); }
+    </style>
 </head>
-<body>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between">
 
-<!-- ==================== LANDING PAGE ==================== -->
-<div id="landing">
-  <div class="hero-logo">P</div>
-  <h1>ARWA <span>Agent</span></h1>
-  <p class="subtitle">
-    Autonomous RWA yield optimizer — converts real-world parking revenue 
-    into on-chain DeFi strategies on Casper Network, powered by AI.
-  </p>
-  <div class="badge-row">
-    <span class="live">Casper 2.0 Testnet</span>
-    <span>x402 Micropayments</span>
-    <span>Odra 2.7</span>
-    <span>CSPR.trade DEX</span>
-    <span>On-Chain Audit Trail</span>
-  </div>
-  <div class="features">
-    <div class="feat">
-      <div class="icon">🚗</div>
-      <h3>Real-World Bridge</h3>
-      <p>Parking lot sensors → immutable on-chain revenue events via RevenueEmitter contract.</p>
-    </div>
-    <div class="feat">
-      <div class="icon">🧠</div>
-      <h3>AI-Powered Decisions</h3>
-      <p>LLM analyzes on-chain data + premium off-chain signals (paid via x402) to decide optimal DeFi strategy.</p>
-    </div>
-    <div class="feat">
-      <div class="icon">🔗</div>
-      <h3>Verifiable Reputation</h3>
-      <p>Every decision logged on-chain to AgentVault — full audit trail with cryptographic proof.</p>
-    </div>
-  </div>
-  <button id="btn-enter">▶ Launch Dashboard</button>
-</div>
-
-<!-- ==================== DASHBOARD ==================== -->
-<div id="dashboard">
-  <div class="container">
-    <div class="header">
-      <div class="brand">
-        <div class="brand-logo">P</div>
-        <div class="brand-text">
-          <h1>ARWA</h1>
-          <p>Autonomous RWA Yield Optimizer · Casper 2.0 Testnet</p>
+    <!-- Navbar -->
+    <header class="border-b border-slate-900/80 bg-darkBg/60 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-arwaRed flex items-center justify-center text-white text-xs font-extrabold">A</div>
+                <span class="text-lg font-extrabold tracking-wider text-white">ARWA</span>
+            </div>
+            <nav class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-400">
+                <a href="#overview" class="hover:text-white transition-colors">Overview</a>
+                <a href="#architecture" class="hover:text-white transition-colors">Architecture</a>
+                <a href="#revenue" class="hover:text-white transition-colors">Use Cases</a>
+                <a href="https://github.com/antidumpalways/ParkFlow-Agent" target="_blank" class="hover:text-white transition-colors">GitHub</a>
+            </nav>
+            <button onclick="document.getElementById('dashboard').style.display='block';document.getElementById('landing-page').style.display='none';initDashboard()" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 transition-all">
+                Launch Demo <i class="fa-solid fa-arrow-right"></i>
+            </button>
         </div>
-      </div>
-      <div class="header-actions">
-        <button id="btn-back">← Back</button>
-        <div id="net-pill" class="pill"><div id="net-dot" class="dot"></div><span id="net-text">Checking…</span></div>
-        <button id="btn-run" class="btn" disabled>▶ Run Cycle</button>
-      </div>
+    </header>
+
+    <div id="landing-page">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-12 md:py-20 space-y-24">
+
+        <!-- HERO -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div class="lg:col-span-6 space-y-6 text-left">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#DAD168]/10 border border-[#DAD168]/20 text-xs text-[#DAD168] font-bold tracking-wide uppercase">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#DAD168] animate-pulse"></span>
+                    Built on Casper 2.0 Testnet
+                </div>
+                <h2 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
+                    Autonomous <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-arwaRed to-orange-500">Revenue Agents</span> <br>
+                    for Real-World Assets
+                </h2>
+                <p class="text-slate-400 text-base md:text-lg max-w-xl leading-relaxed">
+                    ARWA senses real-world revenue, purchases premium intelligence via x402, executes the optimal financial action, and proves everything on-chain for verifiable reputation.
+                </p>
+                <div class="flex flex-wrap gap-4 pt-2">
+                    <button onclick="document.getElementById('dashboard').style.display='block';document.getElementById('landing-page').style.display='none';initDashboard()" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-sm font-bold py-3.5 px-7 rounded-xl flex items-center gap-2 transition-all">
+                        Launch Demo <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                    <a href="https://github.com/antidumpalways/ParkFlow-Agent" target="_blank" class="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 text-sm font-bold py-3.5 px-7 rounded-xl transition-all">
+                        View on GitHub
+                    </a>
+                </div>
+                <div class="pt-6 flex items-center gap-6 text-xs text-slate-500 font-medium">
+                    <span>Powered by <span class="text-slate-300 font-semibold">Casper Network</span></span>
+                    <span class="w-1 h-1 rounded-full bg-slate-700"></span>
+                    <span>Secured by <span class="text-slate-300 font-semibold">AgentVault</span></span>
+                </div>
+            </div>
+
+            <!-- How ARWA Thinks Card -->
+            <div class="lg:col-span-6 flex justify-center lg:justify-end">
+                <div class="w-full max-w-md bg-cardBg/90 border border-slate-800/80 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+                    <div class="absolute -top-24 -right-24 w-48 h-48 bg-arwaRed/10 rounded-full blur-3xl"></div>
+                    <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-[#DAD168]/5 rounded-full blur-3xl"></div>
+                    <div class="mb-8 pb-4 border-b border-slate-800/50">
+                        <h3 class="text-md font-extrabold tracking-wide text-white">How ARWA Thinks</h3>
+                    </div>
+                    <div class="relative flex flex-col gap-8">
+                        <div class="absolute left-[76px] top-6 bottom-6 w-[2px] bg-slate-800/80 z-0">
+                            <div id="vertical-glow-line" class="w-full bg-[#DAD168] shadow-[0_0_10px_#DAD168] transition-all duration-300" style="height: 0%;"></div>
+                        </div>
+
+                        <!-- Step 1: SENSE -->
+                        <div id="step-1" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                            <div class="relative w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box">
+                                <div class="radar-ripple hidden" id="radar-ripple-el"></div>
+                                <i class="fa-solid fa-circle-dot text-lg"></i>
+                            </div>
+                            <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">1</div>
+                            <div class="flex-1 min-w-0">
+                                <span class="text-[10px] font-mono text-[#DAD168] font-bold uppercase tracking-wider block">SENSE</span>
+                                <h4 class="text-sm font-semibold text-slate-300 leading-snug">Detecting RWA revenue...</h4>
+                                <p class="text-xs text-slate-500 font-medium mt-0.5">Parking Gate P1 <span class="text-emerald-400 font-bold ml-1">+$10.00</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: PAY -->
+                        <div id="step-2" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-[10px] font-mono font-bold text-slate-500 step-icon-box">x402</div>
+                            <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">2</div>
+                            <div class="flex-1 min-w-0">
+                                <span class="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block step-tag-header">PAY</span>
+                                <h4 class="text-sm font-semibold text-slate-300 leading-snug">Purchasing intelligence via x402...</h4>
+                                <p class="text-xs text-slate-500 font-mono mt-0.5">0.001 CSPR</p>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: REASON -->
+                        <div id="step-3" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-brain text-lg"></i></div>
+                            <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">3</div>
+                            <div class="flex-1 min-w-0">
+                                <span class="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block step-tag-header">REASON</span>
+                                <h4 class="text-sm font-semibold text-slate-300 leading-snug">Evaluating strategies...</h4>
+                                <div class="flex items-center gap-3 mt-1.5">
+                                    <span class="text-xs text-slate-400 font-medium font-mono">Confidence: 87%</span>
+                                    <div class="w-20 bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800"><div id="reason-progress-bar" class="bg-[#DAD168] h-full w-0 transition-all duration-700 ease-out"></div></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: ACT -->
+                        <div id="step-4" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-bolt text-lg"></i></div>
+                            <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">4</div>
+                            <div class="flex-1 min-w-0">
+                                <span class="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block step-tag-header">ACT</span>
+                                <h4 id="act-dynamic-text" class="text-sm font-semibold text-slate-300 leading-snug transition-colors duration-300">Provide Liquidity</h4>
+                                <p id="act-dynamic-sub" class="text-xs text-slate-500 font-medium mt-0.5">to Yield Pools</p>
+                            </div>
+                            <div class="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800/60 p-1.5 rounded-lg self-center shrink-0">
+                                <i id="act-icon-0" class="fa-solid fa-shuffle text-[10px] p-1 text-slate-600 transition-colors"></i>
+                                <i id="act-icon-1" class="fa-solid fa-droplet text-[10px] p-1 text-slate-600 transition-colors"></i>
+                                <i id="act-icon-2" class="fa-solid fa-landmark text-[10px] p-1 text-slate-600 transition-colors"></i>
+                                <i id="act-icon-3" class="fa-solid fa-chart-line text-[10px] p-1 text-slate-600 transition-colors"></i>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: PROVE -->
+                        <div id="step-5" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-shield-halved text-lg"></i></div>
+                            <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">5</div>
+                            <div class="flex-1 min-w-0">
+                                <span class="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block step-tag-header">PROVE</span>
+                                <h4 class="text-sm font-semibold text-slate-300 leading-snug">Decision committed to AgentVault</h4>
+                                <p id="prove-tx-hash" class="text-xs text-[#DAD168] font-mono mt-0.5">TX: 2ffe74...beed</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 pt-5 border-t border-slate-800/50 flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-slate-400 text-xs font-mono">
+                            <i class="fa-regular fa-clock text-[#DAD168] animate-spin" style="animation-duration: 4s;"></i>
+                            <span id="next-cycle-countdown">Next cycle in 03s</span>
+                        </div>
+                        <div class="w-24 bg-slate-950 h-1 rounded-full overflow-hidden border border-slate-900">
+                            <div id="cycle-progress-bar" class="bg-gradient-to-r from-arwaRed to-[#DAD168] h-full w-0 transition-all duration-100 ease-linear"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FROM REVENUE TO REPUTATION -->
+        <section id="overview" class="text-center space-y-12 border-t border-slate-900 pt-16">
+            <div class="space-y-3">
+                <h3 class="text-2xl md:text-3xl font-extrabold text-white">From Revenue to Reputation</h3>
+                <p class="text-slate-400 max-w-xl mx-auto text-sm">A fully autonomous pipeline bridging real-world assets to on-chain verifiable reputation.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-8 max-w-4xl mx-auto relative pt-4">
+                <div class="space-y-3 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[#DAD168]"><i class="fa-solid fa-tower-broadcast text-sm"></i></div>
+                    <div><h4 class="text-xs font-bold text-white uppercase tracking-wider">Sense</h4><p class="text-[11px] text-slate-500 mt-1 max-w-[150px]">Detect real-world revenue events</p></div>
+                </div>
+                <div class="space-y-3 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[#DAD168]"><i class="fa-solid fa-microchip text-sm"></i></div>
+                    <div><h4 class="text-xs font-bold text-white uppercase tracking-wider">Pay</h4><p class="text-[11px] text-slate-500 mt-1 max-w-[150px]">Acquire premium intelligence via x402</p></div>
+                </div>
+                <div class="space-y-3 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[#DAD168]"><i class="fa-solid fa-brain text-sm"></i></div>
+                    <div><h4 class="text-xs font-bold text-white uppercase tracking-wider">Reason</h4><p class="text-[11px] text-slate-500 mt-1 max-w-[150px]">Evaluate strategies using AI or heuristics</p></div>
+                </div>
+                <div class="space-y-3 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[#DAD168]"><i class="fa-solid fa-bolt-lightning text-sm"></i></div>
+                    <div><h4 class="text-xs font-bold text-white uppercase tracking-wider">Act</h4><p class="text-[11px] text-slate-500 mt-1 max-w-[150px]">Execute the optimal financial action</p></div>
+                </div>
+                <div class="space-y-3 flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[#DAD168]"><i class="fa-solid fa-shield-halved text-sm"></i></div>
+                    <div><h4 class="text-xs font-bold text-white uppercase tracking-wider">Prove</h4><p class="text-[11px] text-slate-500 mt-1 max-w-[150px]">Commit every decision on-chain</p></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BUILT FOR REAL-WORLD REVENUE -->
+        <section id="revenue" class="space-y-12 border-t border-slate-900 pt-16">
+            <div class="text-center space-y-3">
+                <h3 class="text-2xl md:text-3xl font-extrabold text-white">Built for Real-World Revenue Sources</h3>
+                <p class="text-slate-400 max-w-xl mx-auto text-sm">Autonomously manage passive cashflow from any real-world asset class.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-cardBg border border-slate-850 p-6 rounded-xl hover:border-slate-800 transition-all space-y-4">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400"><i class="fa-solid fa-square-parking text-lg"></i></div>
+                    <h4 class="font-bold text-white text-md">Parking Lots</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">Automate idle cashflow from parking operations.</p>
+                </div>
+                <div class="bg-cardBg border border-slate-850 p-6 rounded-xl hover:border-slate-800 transition-all space-y-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400"><i class="fa-solid fa-house-chimney text-lg"></i></div>
+                    <h4 class="font-bold text-white text-md">Rental Assets</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">Extract rent revenue from real estate.</p>
+                </div>
+                <div class="bg-cardBg border border-slate-850 p-6 rounded-xl hover:border-slate-800 transition-all space-y-4">
+                    <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400"><i class="fa-solid fa-music text-lg"></i></div>
+                    <h4 class="font-bold text-white text-md">Royalties</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">Monetize IP, content, and creative royalties.</p>
+                </div>
+                <div class="bg-cardBg border border-slate-850 p-6 rounded-xl hover:border-slate-800 transition-all space-y-4">
+                    <div class="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-400"><i class="fa-solid fa-leaf text-lg"></i></div>
+                    <h4 class="font-bold text-white text-md">Carbon Credits</h4>
+                    <p class="text-xs text-slate-400 leading-relaxed">Capture and deploy environmental revenue.</p>
+                </div>
+            </div>
+        </section>
+    </main>
     </div>
 
-    <div class="action-bar">
-      <div>
-        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">Parking Lot</div>
-        <input id="in-source" class="input" value="P1 - Main Gate" />
-      </div>
-      <div>
-        <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">USD / Cycle</div>
-        <input id="in-amount-usd" class="input" type="number" value="20" step="1" style="width:90px" />
-      </div>
-      <div id="status-line" style="margin-left:auto;color:var(--color-text-muted);font-size:12px">Backend offline — start <code>npm run dev</code> in agent/</div>
-    </div>
-
-    <div class="grid grid-3">
-
-      <!-- Card 1: Physical World -->
-      <div class="card">
-        <h2>Physical World <span class="badge">IoT Bridge</span></h2>
-        <div class="gate-card">
-          <div class="gate-row">
-            <div id="gate-icon" class="gate-icon"></div>
-            <div class="gate-info">
-              <div class="label">Parking Gate</div>
-              <div class="value" id="gate-state">Waiting for vehicle…</div>
-              <div class="sub" id="gate-sub">No vehicles in last cycle</div>
+    <!-- ============ DASHBOARD (hidden initially) ============ -->
+    <div id="dashboard" style="display:none">
+      <div class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <button onclick="document.getElementById('dashboard').style.display='none';document.getElementById('landing-page').style.display='block'" class="text-slate-400 hover:text-white">← Back</button>
+            <h2 class="text-xl font-extrabold text-white">ARWA Dashboard</h2>
+            <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs"><div id="net-dot" class="w-2 h-2 rounded-full bg-slate-500"></div><span id="net-text">Checking...</span></div>
+          </div>
+          <button id="btn-run" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold py-2.5 px-5 rounded-lg disabled:opacity-50" disabled>▶ Run Cycle</button>
+        </div>
+        <div class="flex gap-4 text-sm">
+          <div><span class="text-xs text-slate-500 uppercase">Source</span><input id="in-source" class="ml-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm w-40" value="P1 - Main Gate"></div>
+          <div><span class="text-xs text-slate-500 uppercase">USD/Cycle</span><input id="in-amount-usd" class="ml-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm w-24" type="number" value="20" step="1"></div>
+          <div id="status-line" class="ml-auto text-slate-500 text-xs self-center">Backend offline</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Card 1 -->
+          <div class="bg-cardBg border border-slate-800 rounded-xl p-5">
+            <h3 class="text-xs uppercase tracking-widest text-slate-500 mb-4">Physical World <span class="bg-[#DAD168]/20 text-[#DAD168] text-[10px] px-2 py-0.5 rounded-full ml-2">IoT Bridge</span></h3>
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-3">
+              <div class="flex items-center gap-4">
+                <div id="gate-icon" class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-2xl"></div>
+                <div><div class="text-xs text-slate-500 uppercase">Parking Gate</div><div id="gate-state" class="text-sm font-semibold text-white">Waiting for vehicle...</div><div id="gate-sub" class="text-xs text-slate-500">No vehicles in last cycle</div></div>
+              </div>
+            </div>
+            <div id="last-tx" class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs space-y-1 hidden">
+              <div class="flex justify-between"><span class="text-slate-500">Vehicle</span><span id="last-tx-plat" class="text-white">—</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Duration</span><span id="last-tx-dur">—</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Fee</span><span id="last-tx-cost">—</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">On-chain</span><span id="last-tx-motes">—</span></div>
+              <div class="text-slate-500 font-mono text-[10px] break-all mt-1" id="last-tx-hash">—</div>
             </div>
           </div>
-        </div>
-        <div class="queue">
-          <div class="label">Queue (Simulated)</div>
-          <ul id="queue-list">
-            <li><span class="plat">—</span><span class="status">no data</span></li>
-          </ul>
-        </div>
-        <div class="tx-card" id="last-tx" style="display:none">
-          <div class="row"><span class="label">Vehicle</span><span class="value" id="last-tx-plat">—</span></div>
-          <div class="row"><span class="label">Duration</span><span class="value" id="last-tx-dur">—</span></div>
-          <div class="row"><span class="label">Fee</span><span class="value" id="last-tx-cost">—</span></div>
-          <div class="row"><span class="label">On-chain</span><span class="value" id="last-tx-motes">—</span></div>
-          <div class="row" style="margin-top:6px"><span class="label">Receipt Hash</span></div>
-          <div class="hash" id="last-tx-hash">—</div>
-        </div>
-      </div>
-
-      <!-- Card 2: AI Brain -->
-      <div class="card">
-        <h2>AI Reasoning <span class="badge">LLM + x402</span></h2>
-        <div class="llm-bubble" id="llm-rationale">"Waiting for cycle…"</div>
-        <div class="llm-meta">
-          <div class="item"><div class="label">Action</div><div class="value" id="llm-action">—</div></div>
-          <div class="item"><div class="label">Confidence</div><div class="value" id="llm-confidence">—</div></div>
-          <div class="item"><div class="label">Pair</div><div class="value" id="llm-pair">—</div></div>
-        </div>
-        <div class="x402-status">
-          <span class="icon" id="x402-icon">⏸</span>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:500" id="x402-label">x402 idle</div>
-            <div style="font-size:11px;color:var(--color-text-muted)" id="x402-detail">Signal: —</div>
+          <!-- Card 2 -->
+          <div class="bg-cardBg border border-slate-800 rounded-xl p-5">
+            <h3 class="text-xs uppercase tracking-widest text-slate-500 mb-4">AI Reasoning <span class="bg-[#DAD168]/20 text-[#DAD168] text-[10px] px-2 py-0.5 rounded-full ml-2">LLM + x402</span></h3>
+            <div id="llm-rationale" class="bg-[#DAD168] text-slate-900 p-3 rounded-xl text-xs italic mb-3">"Waiting for cycle..."</div>
+            <div class="flex gap-2 text-xs mb-3">
+              <div class="bg-slate-950 rounded-lg p-2 flex-1"><span class="text-slate-500 block">Action</span><span id="llm-action" class="text-white font-bold">—</span></div>
+              <div class="bg-slate-950 rounded-lg p-2 flex-1"><span class="text-slate-500 block">Confidence</span><span id="llm-confidence" class="text-white font-bold">—</span></div>
+              <div class="bg-slate-950 rounded-lg p-2 flex-1"><span class="text-slate-500 block">Pair</span><span id="llm-pair" class="text-white font-bold">—</span></div>
+            </div>
+            <div class="bg-slate-950 rounded-lg p-3 flex items-center gap-2 text-xs">
+              <span id="x402-icon">⏸</span>
+              <div><div id="x402-label" class="text-white">x402 idle</div><div id="x402-detail" class="text-slate-500">Signal: —</div></div>
+            </div>
+          </div>
+          <!-- Card 3 -->
+          <div class="bg-cardBg border border-slate-800 rounded-xl p-5">
+            <h3 class="text-xs uppercase tracking-widest text-slate-500 mb-4">On-Chain Record <span class="bg-[#DAD168]/20 text-[#DAD168] text-[10px] px-2 py-0.5 rounded-full ml-2">Audit Trail</span></h3>
+            <div class="flex gap-2 mb-3">
+              <div class="bg-slate-950 rounded-lg p-3 flex-1"><span class="text-[10px] text-slate-500 uppercase">Decisions</span><div id="kpi-strategies" class="text-2xl font-extrabold text-white">0</div></div>
+              <div class="bg-slate-950 rounded-lg p-3 flex-1"><span class="text-[10px] text-slate-500 uppercase">Reputation</span><div id="kpi-reputation" class="text-2xl font-extrabold text-white">0</div></div>
+            </div>
+            <div class="text-[10px] text-slate-500 uppercase mb-2">Recent On-Chain Decisions</div>
+            <div id="recent-tx" class="text-xs text-slate-400 max-h-48 overflow-y-auto"><div class="p-2">No decisions yet — start the cycle</div></div>
           </div>
         </div>
       </div>
-
-      <!-- Card 3: Blockchain -->
-      <div class="card">
-        <h2>On-Chain Record <span class="badge">Audit Trail</span></h2>
-        <div class="kpi-row">
-          <div class="kpi"><div class="label">Decisions</div><div class="value" id="kpi-strategies">0</div></div>
-          <div class="kpi"><div class="label">Reputation</div><div class="value" id="kpi-reputation">0</div></div>
-        </div>
-        <div style="margin-top:12px">
-          <div class="label" style="font-size:10px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:1px">Recent On-Chain Decisions</div>
-          <div class="tx-list" id="recent-tx">
-            <div style="padding:8px;color:var(--color-text-muted);font-size:12px">No decisions yet — start the cycle</div>
-          </div>
-        </div>
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <a id="link-rev" class="btn btn-ghost" target="_blank" style="text-decoration:none;font-size:11px;padding:6px 10px">RevenueEmitter ↗</a>
-          <a id="link-vault" class="btn btn-ghost" target="_blank" style="text-decoration:none;font-size:11px;padding:6px 10px">AgentVault ↗</a>
-        </div>
-      </div>
-
     </div>
 
-    <div class="footer">
-      Built for Casper Agentic Buildathon 2026 · Odra 2.7 · x402 · CSPR.trade MCP · CSPR.cloud REST + Streaming
-    </div>
-  </div>
-</div>
+    <footer class="border-t border-slate-950 py-8 px-6 text-center text-xs text-slate-600 bg-slate-950/40 mt-12">
+        <p>&copy; 2026 ARWA Labs. Built for Casper Agentic Buildathon 2026. Apache 2.0.</p>
+    </footer>
 
-<script>
-  const API_BASE = 'http://localhost:4000';
-  const EXPLORER = 'https://testnet.cspr.live';
-  let connectedPubkey = null;
-  let eventSource = null;
-  let recentDecisions = [];
+    <!-- Pipeline animation script -->
+    <script>
+        const cycleTotalDuration = 7200;
+        let startTime = Date.now();
+        let currentCycle = 1;
+        const actStrategies = [
+            { label: "Provide Liquidity", sub: "to Yield Pools", activeIconIdx: 1 },
+            { label: "Swap Assets", sub: "on CSPR.trade DEX", activeIconIdx: 0 },
+            { label: "Allocate to Lending", sub: "on money markets", activeIconIdx: 2 },
+            { label: "Treasury Rebalancing", sub: "for risk mitigation", activeIconIdx: 3 }
+        ];
+        const nodeElements = { 1:document.getElementById('step-1'),2:document.getElementById('step-2'),3:document.getElementById('step-3'),4:document.getElementById('step-4'),5:document.getElementById('step-5') };
+        let verticalGlowLine, nextCycleCountdown, cycleProgressBar, reasonProgressBar;
+        let actDynamicText, actDynamicSub, radarRippleEl, proveTxHash;
 
-  // Landing → Dashboard
-  document.getElementById('btn-enter').addEventListener('click', () => {
-    document.getElementById('landing').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    initDashboard();
-  });
-  document.getElementById('btn-back').addEventListener('click', () => {
-    document.getElementById('dashboard').style.display = 'none';
-    document.getElementById('landing').style.display = 'flex';
-  });
+        function initElements() {
+            verticalGlowLine = document.getElementById('vertical-glow-line');
+            nextCycleCountdown = document.getElementById('next-cycle-countdown');
+            cycleProgressBar = document.getElementById('cycle-progress-bar');
+            reasonProgressBar = document.getElementById('reason-progress-bar');
+            actDynamicText = document.getElementById('act-dynamic-text');
+            actDynamicSub = document.getElementById('act-dynamic-sub');
+            radarRippleEl = document.getElementById('radar-ripple-el');
+            proveTxHash = document.getElementById('prove-tx-hash');
+        }
 
-  function setNet(state, text) {
-    const pill = document.getElementById('net-pill');
-    pill.classList.remove('live', 'alert');
-    if (state === 'live') pill.classList.add('live');
-    if (state === 'alert') pill.classList.add('alert');
-    document.getElementById('net-text').textContent = text;
-  }
+        const generateTxHash = () => { const hex="0123456789abcdef"; let h="2ffe"; for(let i=0;i<6;i++)h+=hex[Math.floor(Math.random()*16)]; return h+"...beed"; };
+        let activeTxHash = "2ffe74...beed";
 
-  function shortenHash(h, head = 10, tail = 6) {
-    if (!h) return '—';
-    return h.slice(0, head) + '…' + h.slice(-tail);
-  }
+        function updateNodeStyle(nodeId, state) {
+            const node = nodeElements[nodeId]; if(!node) return;
+            const iconBox = node.querySelector('.step-icon-box');
+            const numBadge = node.querySelector('.step-number-badge');
+            const headerTag = node.querySelector('.step-tag-header');
+            if(!iconBox||!numBadge) return;
+            if(state==='pending'){node.classList.remove('opacity-100');node.classList.add('opacity-40');iconBox.classList.remove('glow-active-icon','border-[#DAD168]','text-[#DAD168]');numBadge.classList.remove('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');numBadge.classList.add('bg-slate-950','text-slate-400','border-slate-800');if(headerTag)headerTag.classList.replace('text-[#DAD168]','text-slate-400');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='0%'}
+            else if(state==='active'){node.classList.remove('opacity-40');node.classList.add('opacity-100');iconBox.classList.add('glow-active-icon');numBadge.classList.remove('bg-slate-950','text-slate-400','border-slate-800');numBadge.classList.add('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.remove('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%'}
+            else if(state==='done'){node.classList.remove('opacity-40');node.classList.add('opacity-100');iconBox.classList.remove('glow-active-icon');iconBox.classList.add('text-[#DAD168]','border-[#DAD168]/50');numBadge.classList.remove('bg-[#DAD168]','text-darkBg','glow-active-number');numBadge.classList.add('bg-slate-900','text-[#DAD168]','border-[#DAD168]/30');if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%'}
+        }
 
-  function renderQueue(plats) {
-    const ul = document.getElementById('queue-list');
-    ul.innerHTML = '';
-    if (!plats || plats.length === 0) {
-      ul.innerHTML = '<li><span class="plat">—</span><span class="status">no data</span></li>';
-      return;
-    }
-    for (const p of plats) {
-      ul.innerHTML += '<li><span class="plat">' + p.plat + '</span><span class="status">' + p.status + '</span></li>';
-    }
-  }
+        function updateActIcons(activeIdx){for(let i=0;i<4;i++){const icon=document.getElementById(`act-icon-${i}`);if(!icon)continue;if(i===activeIdx){icon.classList.remove('text-slate-600');icon.classList.add('text-[#DAD168]','scale-110')}else{icon.classList.remove('text-[#DAD168]','scale-110');icon.classList.add('text-slate-600')}}}
 
-  function renderRecentDecisions() {
-    const el = document.getElementById('recent-tx');
-    if (recentDecisions.length === 0) {
-      el.innerHTML = '<div style="padding:8px;color:var(--color-text-muted);font-size:12px">No decisions yet — start the cycle</div>';
-      return;
-    }
-    el.innerHTML = '';
-    for (const d of recentDecisions) {
-      const oc = d.outcome === 'success' ? 'success' : 'reverted';
-      el.innerHTML += '<div class="row"><div class="left"><div class="action">' + d.action + '</div><div class="pair">' + d.pair + '</div></div><div class="right"><div class="outcome ' + oc + '">' + (d.outcome === 'success' ? '✓' : '✗') + ' ' + d.outcome + '</div><a class="hash" href="' + EXPLORER + '/deploy/' + d.tx_hash + '" target="_blank">' + shortenHash(d.tx_hash) + '</a></div></div>';
-    }
-  }
+        function tick(){const now=Date.now();const elapsed=(now-startTime)%cycleTotalDuration;const elapsedSeconds=elapsed/1000;const calculatedCycle=Math.floor((now-startTime)/cycleTotalDuration)+1;if(calculatedCycle!==currentCycle){currentCycle=calculatedCycle;activeTxHash=generateTxHash();if(proveTxHash)proveTxHash.textContent=`TX: ${activeTxHash}`}const currentStrategyIndex=(currentCycle-1)%actStrategies.length;const activeStrategy=actStrategies[currentStrategyIndex];const progressPercent=(elapsed/cycleTotalDuration)*100;if(cycleProgressBar)cycleProgressBar.style.width=`${progressPercent}%`;
+        if(elapsedSeconds>=0&&elapsedSeconds<1){updateNodeStyle(1,'active');updateNodeStyle(2,'pending');updateNodeStyle(3,'pending');updateNodeStyle(4,'pending');updateNodeStyle(5,'pending');updateActIcons(-1);if(verticalGlowLine)verticalGlowLine.style.height="0%";if(nextCycleCountdown)nextCycleCountdown.textContent="Processing network state..."}
+        else if(elapsedSeconds>=1&&elapsedSeconds<2){updateNodeStyle(1,'done');updateNodeStyle(2,'active');updateNodeStyle(3,'pending');updateNodeStyle(4,'pending');updateNodeStyle(5,'pending');if(verticalGlowLine)verticalGlowLine.style.height="25%"}
+        else if(elapsedSeconds>=2&&elapsedSeconds<3){updateNodeStyle(1,'done');updateNodeStyle(2,'done');updateNodeStyle(3,'active');updateNodeStyle(4,'pending');updateNodeStyle(5,'pending');if(verticalGlowLine)verticalGlowLine.style.height="50%"}
+        else if(elapsedSeconds>=3&&elapsedSeconds<4){updateNodeStyle(1,'done');updateNodeStyle(2,'done');updateNodeStyle(3,'done');updateNodeStyle(4,'active');updateNodeStyle(5,'pending');if(actDynamicText)actDynamicText.textContent=activeStrategy.label;if(actDynamicSub)actDynamicSub.textContent=activeStrategy.sub;updateActIcons(activeStrategy.activeIconIdx);if(verticalGlowLine)verticalGlowLine.style.height="75%"}
+        else if(elapsedSeconds>=4&&elapsedSeconds<5){updateNodeStyle(1,'done');updateNodeStyle(2,'done');updateNodeStyle(3,'done');updateNodeStyle(4,'done');updateNodeStyle(5,'active');if(verticalGlowLine)verticalGlowLine.style.height="100%"}
+        else{updateNodeStyle(1,'done');updateNodeStyle(2,'done');updateNodeStyle(3,'done');updateNodeStyle(4,'done');updateNodeStyle(5,'done');const remainingSeconds=Math.ceil(7.2-elapsedSeconds);if(nextCycleCountdown)nextCycleCountdown.textContent=`Next cycle in 0${remainingSeconds}s`}}
 
-  async function fetchHealth() {
-    try {
-      const h = await fetch(API_BASE + '/api/health').then(r => r.json());
-      if (h.ok) {
-        setNet('live', 'Live on ' + h.network);
-        document.getElementById('btn-run').disabled = false;
-        document.getElementById('status-line').textContent = 'Connected — Ready to run';
-      }
-      if (h.contracts) {
-        if (h.contracts.revenue_emitter) document.getElementById('link-rev').href = EXPLORER + '/contract/' + h.contracts.revenue_emitter;
-        if (h.contracts.agent_vault) document.getElementById('link-vault').href = EXPLORER + '/contract/' + h.contracts.agent_vault;
-      }
-    } catch (e) {
-      setNet('alert', 'Backend offline');
-    }
-  }
+        // ====== DASHBOARD JS ======
+        const API_BASE = 'http://localhost:4000', EXPLORER = 'https://testnet.cspr.live';
+        let connectedPubkey=null, eventSource=null, recentDecisions=[];
 
-  async function refreshState() {
-    try {
-      const s = await fetch(API_BASE + '/api/state').then(r => r.json());
-      document.getElementById('kpi-strategies').textContent = s.totalStrategies ?? 0;
-      document.getElementById('kpi-reputation').textContent = s.reputation ?? 0;
-    } catch (e) {}
-  }
+        function setNet(s,t){const p=document.getElementById('net-text');const d=document.getElementById('net-dot');if(s==='live'){d.style.background='#16a34a';d.style.animation='radar-pulse 2s infinite'}else{d.style.background='#ef4444';d.style.animation='none'}p.textContent=t}
+        function shortenHash(h,a=10,b=6){return h?h.slice(0,a)+'…'+h.slice(-b):'—'}
+        function renderRecentDecisions(){const e=document.getElementById('recent-tx');if(recentDecisions.length===0){e.innerHTML='<div class="p-2">No decisions yet</div>';return}e.innerHTML='';for(const d of recentDecisions){const o=d.outcome==='success'?'text-emerald-400':'text-red-400';e.innerHTML+=`<div class="flex justify-between py-1 border-b border-slate-800/50"><div><span class="text-white font-medium">${d.action}</span> <span class="text-slate-500">${d.pair}</span></div><div class="text-right"><span class="${o} text-[10px]">${d.outcome}</span><br><a class="text-[10px] text-slate-600 font-mono" href="${EXPLORER}/deploy/${d.tx_hash}" target="_blank">${shortenHash(d.tx_hash)}</a></div></div>`}}
 
-  async function runAgentCycle() {
-    const btn = document.getElementById('btn-run');
-    btn.disabled = true;
-    const source = document.getElementById('in-source').value;
-    const amountUsd = Number(document.getElementById('in-amount-usd').value);
-    const cspr = amountUsd / 0.10;
-    const amountMotes = String(Math.floor(cspr * 1e9));
+        async function fetchHealth(){try{const h=await fetch(API_BASE+'/api/health').then(r=>r.json());if(h.ok){setNet('live','Live on '+h.network);document.getElementById('btn-run').disabled=false;document.getElementById('status-line').textContent='Connected — Ready'}if(h.contracts){document.getElementById('link-rev')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.revenue_emitter);document.getElementById('link-vault')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.agent_vault)}}catch(e){setNet('alert','Backend offline')}}
+        async function refreshState(){try{const s=await fetch(API_BASE+'/api/state').then(r=>r.json());document.getElementById('kpi-strategies').textContent=s.totalStrategies??0;document.getElementById('kpi-reputation').textContent=s.reputation??0}catch(e){}}
+        async function runAgentCycle(){const btn=document.getElementById('btn-run');btn.disabled=true;const source=document.getElementById('in-source').value;const amountUsd=Number(document.getElementById('in-amount-usd').value);const cspr=amountUsd/0.10;const amountMotes=String(Math.floor(cspr*1e9));document.getElementById('llm-rationale').textContent='"Analyzing on-chain data..."';document.getElementById('status-line').textContent='Running cycle for $'+amountUsd+' on '+source;try{const res=await fetch(API_BASE+'/api/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:amountMotes,source,ownerAddress:connectedPubkey||'02agent'})});const data=await res.json();if(!data.ok)throw new Error(data.error||'Cycle failed');if(data.lastSimulated){const t=data.lastSimulated;document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open — Vehicle Exiting';document.getElementById('gate-sub').textContent=t.plat+' parked '+t.durationMin+'min';document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=t.plat;document.getElementById('last-tx-dur').textContent=t.durationMin+' min';document.getElementById('last-tx-cost').textContent='$'+t.costUsd.toFixed(2);document.getElementById('last-tx-motes').textContent=t.motes+' motes';document.getElementById('last-tx-hash').textContent=t.hash}const p=data.proposal;document.getElementById('llm-rationale').textContent='"'+ (p.rationale||'Strategy executed.')+'"';document.getElementById('llm-action').textContent=p.action;document.getElementById('llm-confidence').textContent=(p.confidence||0)+'%';document.getElementById('llm-pair').textContent=p.pair;if(p.x402Proof){document.getElementById('x402-icon').textContent='✓';document.getElementById('x402-label').textContent='x402 Verified · 0.001 CSPR paid'}if(data.execution){recentDecisions.unshift({action:p.action,pair:p.pair,outcome:data.execution.vaultResult?.outcome||'success',tx_hash:data.execution.vaultResult?.txHash||data.execution.txHash});if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions()}document.getElementById('status-line').textContent='✓ Cycle Complete';await refreshState()}catch(e){document.getElementById('llm-rationale').textContent='"'+e.message+'"';document.getElementById('status-line').textContent='✗ '+e.message}finally{btn.disabled=false}}
+        function connectEventStream(){try{if(eventSource)eventSource.close();eventSource=new EventSource(API_BASE+'/api/events');eventSource.addEventListener('strategy',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open';if(d.rationale)document.getElementById('llm-rationale').textContent='"'+d.rationale+'"';recentDecisions.unshift(d);if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions();refreshState()}catch{}});eventSource.addEventListener('revenue',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Vehicle Exiting';document.getElementById('gate-sub').textContent='+'+d.amount+' motes from '+d.source;document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=d.source;document.getElementById('last-tx-motes').textContent=d.amount+' motes';document.getElementById('last-tx-hash').textContent=d.reference}catch{}});eventSource.onerror=()=>setNet('alert','SSE Disconnected')}catch(e){}}
+        function initDashboard(){document.getElementById('btn-run').addEventListener('click',runAgentCycle);fetchHealth();refreshState();setInterval(()=>{fetchHealth();refreshState()},5000);connectEventStream()}
 
-    document.getElementById('llm-rationale').textContent = '"Analyzing on-chain data… fetching premium signal via x402…"';
-    document.getElementById('status-line').textContent = 'Running cycle for $' + amountUsd + ' on ' + source;
-
-    try {
-      const res = await fetch(API_BASE + '/api/cycle', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: amountMotes, source, ownerAddress: connectedPubkey || '02agent' }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Cycle failed');
-
-      if (data.lastSimulated) {
-        const t = data.lastSimulated;
-        document.getElementById('gate-icon').classList.add('open');
-        document.getElementById('gate-state').textContent = 'Gate Open — Vehicle Exiting';
-        document.getElementById('gate-sub').textContent = t.plat + ' parked ' + t.durationMin + 'min';
-        document.getElementById('last-tx').style.display = 'block';
-        document.getElementById('last-tx-plat').textContent = t.plat;
-        document.getElementById('last-tx-dur').textContent = t.durationMin + ' min';
-        document.getElementById('last-tx-cost').textContent = '$' + t.costUsd.toFixed(2);
-        document.getElementById('last-tx-motes').textContent = t.motes + ' motes';
-        document.getElementById('last-tx-hash').textContent = t.hash;
-        renderQueue([{ plat: t.plat, status: 'exited ✓' }, { plat: 'B 5678 XYZ', status: 'queued' }, { plat: 'D 1234 ABC', status: 'queued' }]);
-      }
-
-      const p = data.proposal;
-      document.getElementById('llm-rationale').textContent = '"' + (p.rationale || 'Strategy executed.') + '"';
-      document.getElementById('llm-action').textContent = p.action;
-      document.getElementById('llm-confidence').textContent = (p.confidence || 0) + '%';
-      document.getElementById('llm-pair').textContent = p.pair;
-      if (p.x402Proof) {
-        document.getElementById('x402-icon').textContent = '✓';
-        document.getElementById('x402-label').textContent = 'x402 Verified · 0.001 CSPR paid';
-        document.getElementById('x402-detail').textContent = 'Signal via ' + (p.x402Proof.facilitator || 'localhost:4001');
-      }
-
-      if (data.execution) {
-        recentDecisions.unshift({
-          action: p.action, pair: p.pair,
-          outcome: data.execution.vaultResult?.outcome || 'success',
-          tx_hash: data.execution.vaultResult?.txHash || data.execution.txHash,
-        });
-        if (recentDecisions.length > 10) recentDecisions = recentDecisions.slice(0, 10);
-        renderRecentDecisions();
-      }
-      document.getElementById('status-line').textContent = '✓ Cycle Complete';
-      await refreshState();
-    } catch (e) {
-      document.getElementById('llm-rationale').textContent = '"' + e.message + '"';
-      document.getElementById('status-line').textContent = '✗ ' + e.message;
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  function connectEventStream() {
-    try {
-      if (eventSource) eventSource.close();
-      eventSource = new EventSource(API_BASE + '/api/events');
-      eventSource.addEventListener('strategy', (ev) => {
-        try {
-          const d = JSON.parse(ev.data);
-          document.getElementById('gate-icon').classList.add('open');
-          document.getElementById('gate-state').textContent = 'Gate Open';
-          document.getElementById('gate-sub').textContent = 'New strategy executed';
-          if (d.rationale) document.getElementById('llm-rationale').textContent = '"' + d.rationale + '"';
-          recentDecisions.unshift(d);
-          if (recentDecisions.length > 10) recentDecisions = recentDecisions.slice(0, 10);
-          renderRecentDecisions();
-          refreshState();
-        } catch {}
-      });
-      eventSource.addEventListener('revenue', (ev) => {
-        try {
-          const d = JSON.parse(ev.data);
-          document.getElementById('gate-icon').classList.add('open');
-          document.getElementById('gate-state').textContent = 'Vehicle Exiting';
-          document.getElementById('gate-sub').textContent = '+' + d.amount + ' motes from ' + d.source;
-          document.getElementById('last-tx').style.display = 'block';
-          document.getElementById('last-tx-plat').textContent = d.source;
-          document.getElementById('last-tx-motes').textContent = d.amount + ' motes';
-          document.getElementById('last-tx-hash').textContent = d.reference;
-        } catch {}
-      });
-      eventSource.onerror = () => setNet('alert', 'SSE Disconnected');
-    } catch (e) {}
-  }
-
-  function initDashboard() {
-    document.getElementById('btn-run').addEventListener('click', runAgentCycle);
-    fetchHealth(); refreshState();
-    setInterval(() => { fetchHealth(); refreshState(); }, 5000);
-    connectEventStream();
-  }
-</script>
+        window.onload = () => { initElements(); startTime = Date.now(); setInterval(tick, 30); };
+    </script>
 </body>
 </html>
