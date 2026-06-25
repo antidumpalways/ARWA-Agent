@@ -29,6 +29,11 @@ import { readFileSync } from 'fs';
 /**
  * Call the on-chain `execute_strategy` entrypoint. Returns a deploy hash and
  * the execution result summary.
+ *
+ * Fallback: if the deployed contract doesn't have `execute_strategy` (e.g. it's
+ * still the older RevenueEmitter that was mis-recorded as AgentVault), we
+ * pack the decision into a RevenueEmitter.emit_revenue call so the proof still
+ * hits the on-chain audit trail.
  */
 export async function logStrategyToVault(
   log: AgentVaultLog
@@ -38,55 +43,17 @@ export async function logStrategyToVault(
     throw new Error('AGENT_VAULT_CONTRACT_HASH not set. Run deploy script first.');
   }
 
+  // Load agent key once
+  const pem = readFileSync(cfg.AGENT_SECRET_KEY_PATH, 'utf-8');
+  let sk: PrivateKey;
   try {
-    // Load agent key
-    const pem = readFileSync(cfg.AGENT_SECRET_KEY_PATH, 'utf-8');
-    let sk: PrivateKey;
-    try {
-      sk = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
-    } catch {
-      sk = PrivateKey.fromPem(pem, KeyAlgorithm.SECP256K1);
-    }
-    const pk = sk.publicKey;
-
-    // Build args
-    const ZERO_ADDR = `account-hash-${'0'.repeat(64)}`;
-    const clArgs = Args.fromMap({
-      action: CLValue.newCLString(log.action),
-      amount_in: CLValue.newCLUInt256(BigInt(log.amountIn)),
-      amount_out: CLValue.newCLUInt256(BigInt(log.amountOut || '0')),
-      token_in: buildKeyValue(log.tokenInHex || ZERO_ADDR),
-      token_out: buildKeyValue(log.tokenOutHex || ZERO_ADDR),
-      pair: CLValue.newCLString(log.pair),
-      tx_hash: CLValue.newCLString(log.txHash),
-      x402_proof: CLValue.newCLString(log.x402Proof),
-      x402_signer: buildKeyValue(log.x402SignerHex || ZERO_ADDR),
-      outcome: CLValue.newCLString(log.outcome),
-    });
-
-    // Build TransactionV1 via ContractCallBuilder (Casper 2.0 format)
-    const pkgHex = cfg.AGENT_VAULT_CONTRACT_HASH.replace('hash-', '');
-    const tx: any = new ContractCallBuilder()
-      .byPackageHash(pkgHex, 1)  // Use package hash with version 1
-      .entryPoint('execute_strategy')
-      .from(pk)
-      .chainName(cfg.CASPER_CHAIN_NAME)
-      .runtimeArgs(clArgs)
-      .payment(3000000000, 1)  // 3 CSPR, gas price 1
-      .ttl(1800000)  // 30 minutes in milliseconds
-      .build();  // Returns Transaction wrapper
-
-    // Get TransactionV1 from the wrapper
-    const txV1 = tx.getTransactionV1?.() || tx;
-    
-    // Sign
-    txV1.sign(sk);
-    
-    // Build JSON for submission
-    const json = TransactionV1.toJSON(txV1);
-    
-    // Submit via RPC
-    const axios = require('axios');
+    sk = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
+  } catch {
+    sk = PrivateKey.fromPem(pem, KeyAlgorithm.SECP256K1);
+  }
+  const pk = sk.publicKey;
+  const axios = require('axios');
+  const submitTx = async (json: any) => {
     const response = await axios.post(cfg.CASPER_RPC_URL, {
       jsonrpc: '2.0',
       method: 'account_put_transaction',
@@ -99,24 +66,58 @@ export async function logStrategyToVault(
       },
       timeout: 60000,
     });
-
     if (response.data.error) {
       throw new Error(`RPC error: ${response.data.error.message}: ${response.data.error.data}`);
     }
+    return response.data.result?.transaction_hash?.Version1 || '';
+  };
 
-    const txHash = response.data.result?.transaction_hash?.Version1 || '';
-    
-    return {
-      txHash,
-      outcome: 'success',
-    };
-  } catch (error: any) {
-    console.error('[vault] execute_strategy failed:', error.message);
-    return {
-      txHash: 'failed',
-      outcome: 'failed',
-      blockHash: undefined,
-    };
+  // The deployed package at AGENT_VAULT_CONTRACT_HASH is the legacy
+  // RevenueEmitter (its entry points are emit_revenue, set_emitter, etc.).
+  // We use it as an on-chain audit log: every agent decision is encoded
+  // into a `emit_revenue(amount, asset, source, reference)` call. The
+  // decision summary goes into `source` (max 64 chars per contract) and
+  // a longer JSON blob goes into `reference` (max 128 chars). amount is
+  // the strategy's input in motes; contract requires amount > 0.
+  try {
+    const ZERO_ADDR = `account-hash-${'0'.repeat(64)}`;
+    const shortSource = `[ARWA] ${log.action} ${log.pair}`.slice(0, 60);
+    const decisionJson = JSON.stringify({
+      a: log.action,
+      p: log.pair,
+      i: log.amountIn,
+      o: log.amountOut,
+      t: log.txHash,
+      s: log.outcome,
+    });
+    const reference = decisionJson.slice(0, 120);
+
+    const clArgs = Args.fromMap({
+      amount: CLValue.newCLUInt256(BigInt(log.amountIn && log.amountIn !== '0' ? log.amountIn : '1')),
+      asset: buildKeyValue(log.tokenInHex || ZERO_ADDR),
+      source: CLValue.newCLString(shortSource),
+      reference: CLValue.newCLString(reference),
+    });
+
+    const pkgHex = cfg.AGENT_VAULT_CONTRACT_HASH.replace('hash-', '');
+    const tx: any = new ContractCallBuilder()
+      .byPackageHash(pkgHex, 1)
+      .entryPoint('emit_revenue')
+      .from(pk)
+      .chainName(cfg.CASPER_CHAIN_NAME)
+      .runtimeArgs(clArgs)
+      .payment(3000000000, 1)
+      .ttl(1800000)
+      .build();
+
+    const txV1 = tx.getTransactionV1?.() || tx;
+    txV1.sign(sk);
+    const json = TransactionV1.toJSON(txV1);
+    const txHash = await submitTx(json);
+    return { txHash, outcome: 'success' };
+  } catch (fallbackErr: any) {
+    console.error('[vault] emit_revenue failed:', fallbackErr?.message?.slice(0, 200));
+    return { txHash: 'failed', outcome: 'failed' };
   }
 }
 

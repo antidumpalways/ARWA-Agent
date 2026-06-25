@@ -25,12 +25,19 @@ export async function runExecutor(
 
   // Build and submit real swap via CSPR.trade MCP (self-hosted for testnet)
   try {
+    // CSPR.trade MCP build_swap bug: it multiplies amount by 10^9 internally,
+    // treating input as already-CSPR value then converting to motes again.
+    // Compensate by dividing our motes input by 10^9 so the on-chain value
+    // matches the intended CSPR amount.
+    const mcpAmountIn = (BigInt(proposal.amountIn) / BigInt(10 ** 9)).toString();
+    console.log('[executor] amountIn scaled', proposal.amountIn, '->', mcpAmountIn, '(MCP 10^9 multiplier bug workaround)');
+
     // 1) Build unsigned deploy via CSPR.trade MCP
     const unsigned = await buildUnsignedDeploy({
       action: proposal.action === 'compound' ? 'add_liquidity' : (proposal.action as any),
       tokenIn: proposal.tokenIn,
       tokenOut: proposal.tokenOut,
-      amountIn: proposal.amountIn,
+      amountIn: mcpAmountIn,
       minAmountOut: proposal.minAmountOut,
       payerAddress: publicKey.toHex(),
     });
