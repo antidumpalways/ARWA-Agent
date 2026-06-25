@@ -10,6 +10,7 @@
  */
 import { buildUnsignedDeploy } from './mcp/csprTradeMcp';
 import { logStrategyToVault } from './casper/vaultClient';
+import { recordStrategyOutcome, updatePortfolioSnapshot } from './agent/riskGuard';
 import { loadConfig } from './config';
 import { ExecutionResult, StrategyProposal } from './types';
 
@@ -25,6 +26,15 @@ export async function runExecutor(
 
   // Build and submit real swap via CSPR.trade MCP (self-hosted for testnet)
   try {
+    // HOLD path: if the circuit breaker forced a hold, skip the swap
+    // entirely. The vault log below still records the skip on-chain.
+    if (proposal.amountIn === '0' || proposal.pair === 'HOLD') {
+      console.log('[executor] HOLD: skipping swap, recording skip on audit log');
+      deployHash = 'hold-' + Date.now().toString(36);
+      outcome = 'skipped';
+      throw new Error('hold-short-circuit');
+    }
+
     // CSPR.trade MCP build_swap bug: it multiplies amount by 10^9 internally,
     // treating input as already-CSPR value then converting to motes again.
     // Compensate by dividing our motes input by 10^9 so the on-chain value
@@ -60,12 +70,27 @@ export async function runExecutor(
   // Use account hash (32 bytes = 64 hex chars), not public key hex
   const accountHashHex = publicKey.accountHash().toHex();
   const agentAddr = `account-hash-${accountHashHex}`;
+
+  // 3b) Record outcome with the risk guard (drives circuit breaker state)
+  try {
+    recordStrategyOutcome({
+      outcome: outcome === 'success' ? 'success' : outcome === 'reverted' ? 'reverted' : 'failed',
+    });
+    // For successful swaps, update the portfolio snapshot to the new
+    // value (CSPR-out amount). This is a rough estimate — the agent
+    // does not currently fetch live portfolio from CSPR.trade MCP here.
+    if (outcome === 'success') {
+      updatePortfolioSnapshot(proposal.minAmountOut || proposal.amountIn);
+    }
+  } catch (e: any) {
+    console.warn('[executor] risk guard update failed (non-critical):', e?.message?.slice(0, 80));
+  }
   
   // Truncate x402 proof to fit Casper session args limit (max ~1024 chars for String)
   const x402ProofTruncated = (proposal.x402Proof?.paymentHeader ?? '').slice(0, 512);
   const x402SettleTruncated = (proposal.x402Proof?.settleTxHash ?? '').slice(0, 64);
   
-  let vaultResult: ExecutionResult = { txHash: 'skipped', outcome: 'skipped' };
+  let vaultResult: ExecutionResult = { txHash: 'skipped', outcome: 'reverted' };
   try {
     vaultResult = await logStrategyToVault({
       action: proposal.action,
@@ -85,7 +110,7 @@ export async function runExecutor(
     console.log('[executor] vault log tx', vaultResult.txHash, vaultResult.outcome);
   } catch (e: any) {
     console.warn('[executor] vault logging failed (non-critical):', e.message?.slice(0, 120));
-    vaultResult = { txHash: 'failed', outcome: 'skipped' };
+    vaultResult = { txHash: 'failed', outcome: 'reverted' };
   }
 
   return { txHash: deployHash, vaultResult, proposal };

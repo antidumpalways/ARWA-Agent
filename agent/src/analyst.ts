@@ -11,6 +11,8 @@ import { payAndFetchViaX402 } from './x402/client';
 import { decideStrategyWithLLM, LLMContext } from './agent/llmStrategy';
 import { applySlippage } from './agent/slippage';
 import { getVaultOverview } from './casper/vaultClient';
+import { selectBestPair } from './agent/pairSelector';
+import { checkCircuitBreaker, recordStrategyOutcome } from './agent/riskGuard';
 import { loadConfig } from './config';
 import { RevenueEvent, StrategyProposal, X402Proof } from './types';
 
@@ -36,8 +38,12 @@ interface DecideArgs {
  * Deterministic fallback strategy (matches the LLM fallback in
  * `agent/llmStrategy.ts#heuristicDecision`). Used when no LLM is configured
  * or `forceHeuristic` is true.
+ *
+ * `tokenOut` is the dynamically-selected pair token (from pairSelector),
+ * not a hardcoded `sCSPR`. This lets the strategy route through any
+ * CSPR pair the DEX offers.
  */
-function decideHeuristic(args: DecideArgs): {
+function decideHeuristic(args: DecideArgs, tokenOut: string): {
   action: StrategyProposal['action'];
   tokenOut: string;
   minAmountOut: string;
@@ -48,16 +54,16 @@ function decideHeuristic(args: DecideArgs): {
   if (piPct < 1 && signalBullish) {
     return {
       action: 'add_liquidity',
-      tokenOut: 'sCSPR',
+      tokenOut,
       minAmountOut: '0',
-      rationale: `Low price impact (${args.quote.priceImpact}) + bullish signal (${args.signal.utilization_forecast}). Add liquidity to capture fees.`,
+      rationale: `Low price impact (${args.quote.priceImpact}) + bullish signal (${args.signal.utilization_forecast}). Add liquidity to ${args.quote.pair} to capture fees.`,
     };
   }
   return {
     action: 'swap',
-    tokenOut: 'sCSPR',
+    tokenOut,
     minAmountOut: applySlippage(args.quote.amountOut, 0.5),
-    rationale: `Conservative swap to sCSPR with 0.5% slippage protection. Price impact ${args.quote.priceImpact}.`,
+    rationale: `Conservative swap to ${tokenOut} with 0.5% slippage protection. Price impact ${args.quote.priceImpact}.`,
   };
 }
 
@@ -103,11 +109,43 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
     console.log(`[analyst] fetched ${recent.length} recent revenue events`);
   }
 
-  // 4) DEX quote for the strategy (MCP - optional)
+  // 4) DEX quote for the strategy — dynamic pair selection (MCP - optional)
   const amountIn = input.revenueEvent.amount;
-  let quote = { amountOut: amountIn, priceImpact: '0%', route: ['CSPR', 'sCSPR'], minReceived: amountIn, pair: 'CSPR/sCSPR', expiresAt: Date.now() + 60000 };
+
+  // 4a) Circuit breaker: pause the agent if drawdown or revert streak breached
+  //     Defaults: 10% drawdown from peak portfolio, 3 reverted txs in a row.
+  const cb = checkCircuitBreaker();
+  if (cb.tripped) {
+    console.warn(`[analyst] CIRCUIT BREAKER TRIPPED: ${cb.reason} — forcing hold`);
+    return buildHoldProposal(input.revenueEvent, cb.reason);
+  }
+
+  // 4b) Pair selector: rank CSPR pairs by impact + yield, fall back to CSPR/sCSPR
+  const signalBullish = false; // computed after x402 below; this is the safe default
+  let selectedPairLabel = 'CSPR/sCSPR';
+  let selectedTokenOut = 'sCSPR';
   try {
-    quote = await getQuote('CSPR', 'sCSPR', amountIn, 'exact_in');
+    const sel = await selectBestPair({
+      amountInMotes: amountIn,
+      signalBullish,
+      maxPriceImpactPct: 1.0,
+    });
+    if (sel.selected) {
+      selectedPairLabel = sel.selected.pair;
+      selectedTokenOut = sel.selected.tokenOut;
+      console.log(`[analyst] pair selector chose ${selectedPairLabel} (impact=${sel.selected.estimatedPriceImpact}, apy~${sel.selected.yieldApy?.toFixed(1)}%)`);
+    } else if (sel.candidates.length > 0) {
+      console.log(`[analyst] pair selector: no safe pair, falling back to CSPR/sCSPR`);
+    } else {
+      console.log(`[analyst] pair selector: MCP unavailable, using CSPR/sCSPR default`);
+    }
+  } catch (e) {
+    console.warn('[analyst] pair selector failed:', (e as Error).message?.slice(0, 80));
+  }
+
+  let quote = { amountOut: amountIn, priceImpact: '0%', route: ['CSPR', selectedTokenOut], minReceived: amountIn, pair: selectedPairLabel, expiresAt: Date.now() + 60000 };
+  try {
+    quote = await getQuote('CSPR', selectedTokenOut, amountIn, 'exact_in');
   } catch (e) {
     console.warn('[analyst] quote fetch failed (MCP unavailable):', (e as Error).message?.slice(0, 80));
   }
@@ -149,7 +187,7 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
   };
 
   if (input.forceHeuristic || !process.env.LLM_API_KEY) {
-    const h = decideHeuristic(decideArgs);
+    const h = decideHeuristic(decideArgs, selectedTokenOut);
     decision = {
       ...h,
       confidence: clamp(paid.data.confidence ?? 0, 0, 100),
@@ -211,4 +249,28 @@ if (require.main === module) {
   })
     .then(p => { console.log('[analyst] proposal', JSON.stringify(p, null, 2)); })
     .catch(e => { console.error('[analyst] failed', e); process.exit(1); });
+}
+
+/**
+ * Build a "hold" proposal — used when the circuit breaker trips and the
+ * agent decides to skip the cycle entirely. The executor handles
+ * `outcome: 'hold'` by NOT submitting any swap and logging the skip
+ * on-chain via the audit log fallback.
+ */
+function buildHoldProposal(
+  revenueEvent: RevenueEvent,
+  reason: string
+): StrategyProposal {
+  return {
+    action: 'swap', // executor coerces to no-op when amountIn === '0'
+    pair: 'HOLD',
+    tokenIn: 'CSPR',
+    tokenOut: 'CSPR',
+    amountIn: '0',
+    minAmountOut: '0',
+    rationale: `[HOLD] ${reason}`,
+    confidence: 0,
+    x402Proof: null,
+    revenueEvent,
+  };
 }

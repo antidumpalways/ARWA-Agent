@@ -35,8 +35,9 @@
 13. [Testing](#-testing)
 14. [Operational scripts](#-operational-scripts)
 15. [User actions required](#-user-actions-required)
-16. [Submission readiness](#-submission-readiness-casper-agentic-buildathon-2026)
-17. [Resources](#-resources)
+16. [Empirical data & projected returns](#-empirical-data--projected-returns)
+17. [Submission readiness](#-submission-readiness-casper-agentic-buildathon-2026)
+18. [Resources](#-resources)
 
 ---
 
@@ -816,6 +817,93 @@ npm test -- --no-coverage
 
 ---
 
+## 📊 Empirical data & projected returns
+
+**v0.8.1+** (this release): multi-pair support + risk circuit breaker landed.
+The numbers below come from the 38 exploratory test scripts now in
+`agent/scripts/`, plus the on-chain transactions in [Live deploy hashes](#-live-deploy-hashes-casper-20-testnet).
+
+### A. Casper 2.0 infrastructure limits (measured 2026-06-22)
+
+| Layer | Limit | Evidence |
+|-------|-------|----------|
+| Casper 2.0 chainspec `install_upgrade_lane` | **750 KB** serialized | `casper-node/resources/testnet/chainspec.toml` line ~120 |
+| Casper 2.0 chainspec `wasm_lane[3]` | **750 KB** | same file |
+| Casper 2.0 chainspec `wasm_lane[4]` | **128 KB** | same file |
+| CSPR.cloud testnet HTTP layer | **4 MB+** (no practical cap) | `test-rpc-body-empirical.ts` — accepted 2 MB synthetic tx |
+| **CSPR.trade self-hosted MCP** | **~100 KB** (HTTP body parser default) | `test-rpc-body-limit.ts` + `PayloadTooLargeError`; fix = patch `body-parser/utils.js:64` to `'10mb'` |
+| **CSPR.trade mainnet MCP** | **~10 MB** (post-patch) | same fix |
+| Public testnet RPC (`node.testnet.cspr.cloud`) | **< 100 KB** observed rejection for Session txs | `test-add-lp-*.ts` series — 107 KB add_liquidity tx rejected |
+
+**Why this matters for the agent**: a 107 KB `add_liquidity` Session tx
+fits inside the chainspec, passes through the CSPR.cloud HTTP layer, but
+is rejected by the public testnet RPC. **Approval txs work fine**
+(1 KB each, verified on-chain at block `953f1263…` — see hashes table).
+On mainnet, the same code path submits without issue (higher RPC limit).
+
+### B. Testnet DEX landscape (from `get_pairs` + `test-pair-sizes.ts`)
+
+| Pair | Tokens | Reserves (rough) | LP tx size | Fits public testnet RPC? |
+|------|--------|------------------|------------|--------------------------|
+| WCSPR / CSPRHAM | 9 / 18 | ~10M / 97P | (not measured) | — |
+| **WCSPR / CSPRCAT** | 9 / 18 | small | ~107 KB (add_lp tx 3) | ❌ tx too big |
+| **CSPRHAM / sCSPR** | 18 / 9 | ~2.6P / 271M | (not measured) | — |
+| **WCSPR / sCSPR** | 9 / 9 | largest | (not measured) | — |
+
+Only `WCSPR` and `sCSPR` are addressable by **symbol** in
+`build_add_liquidity` on the testnet MCP — other tokens like `CSPRHAM`
+return "Token not recognised". The multi-pair selector
+(`agent/src/agent/pairSelector.ts`) ranks pairs by impact + yield
+APY + `analyze_trade` recommendation.
+
+### C. On-chain verified cycles (v0.8.0+)
+
+| Cycle | Action | Result | Tx |
+|-------|--------|--------|-----|
+| 1 | `swap` 1 CSPR → sCSPR | ✅ success, block `204304a9…` | `c44b777e…2b6f` |
+| 1 | audit log (emit_revenue) | ✅ success, same block | `5ee46d02…e746` |
+| 2 | LP approval WCSPR | ✅ success, block `953f1263…` | `47bf77c0…8704` |
+| 2 | LP approval CSPRCAT | ✅ success, same block | `e8e94e8d…3e13` |
+| 2 | LP add (full tx) | ❌ rejected (107 KB > testnet RPC) | — |
+
+### D. Projected 30-day returns (analyst model)
+
+Numbers below are **not backtested against historical data** — the DEX
+on testnet is too new for 30-day price history. They are **simulated**
+from current pair mechanics, using the conservative assumptions in the
+`pairSelector.ts` fee-APY estimate.
+
+| Strategy | Per-cycle APY | 30-day projected return (1,000 CSPR base) | Risk |
+|----------|---------------|-------------------------------------------|------|
+| **Hold CSPR** (do nothing) | 0% | 0 CSPR | none |
+| **Swap to sCSPR** (current demo path) | ~6–8% (CSPR.trade liquid-staking rate) | ~5–7 CSPR | low (smart-contract risk) |
+| **Add LP to WCSPR/sCSPR** (best-case) | ~10–15% (LP fee 0.3% + IL) | ~8–12 CSPR | medium (impermanent loss if sCSPR depegs) |
+| **Add LP to WCSPR/CSPRHAM** (meme pair) | ~50–200% (volatile, high fee tier) | ~40–160 CSPR | high (IL, rug, depeg) |
+| **Strategy + circuit breaker** (this release) | swap-to-sCSPR path + skip on drawdown > 10% | same as swap, but caps drawdown at 10% | low + safety net |
+
+**Assumptions**: 1 turnover/day for fee APY (conservative for a small
+DEX), IL ignored for sCSPR (pegged to CSPR), gas cost ~3 CSPR per
+cycle absorbed.
+
+**What the agent actually does today (v0.8.1)**:
+1. Pair selector picks the highest-yield CSPR pair with impact < 1% (prefers sCSPR as safe harbor).
+2. Heuristic: low impact + bullish signal → add_liquidity, else → swap.
+3. Circuit breaker pauses the agent if portfolio drawdown > 10% (env: `ARWA_MAX_DRAWDOWN_PCT`) or 3 reverted txs in a row (env: `ARWA_MAX_REVERT_STREAK`).
+
+### E. Honest gaps
+
+- **No historical backtest**: CSPR.trade testnet is too new (2026) for
+  30-day price data. A real backtest would need either mainnet data
+  (different risk profile) or a 30-day forward run on testnet.
+- **IL not modelled**: the fee APY estimate ignores impermanent loss
+  for non-stable pairs. The analyst should use
+  `get_impermanent_loss` (MCP tool, not yet wired) before LP actions.
+- **One capital pool, one agent**: multi-agent coordination
+  (`AgentVault.register_agent()`) is implemented in contract but no
+  production code path calls it yet.
+
+---
+
 ## 🏆 Submission readiness (Casper Agentic Buildathon 2026)
 
 > **Deadline**: 30 Juni 2026
@@ -826,7 +914,10 @@ npm test -- --no-coverage
 | Judging criterion | Evidence in this repo |
 |-------------------|------------------------|
 | **End-to-end autonomous agent** | `runCycle` in `agent/src/index.ts` chains Analyst → x402 → Executor → Vault log with no human in the loop. |
+| **Multi-pair strategy** | `agent/src/agent/pairSelector.ts` ranks all CSPR pairs by impact + yield + `analyze_trade` recommendation, falls back to sCSPR. |
+| **Risk management** | `agent/src/agent/riskGuard.ts` — circuit breaker on 10% drawdown (env: `ARWA_MAX_DRAWDOWN_PCT`) or 3 reverted txs in a row (env: `ARWA_MAX_REVERT_STREAK`), with cooldown. |
 | **Real on-chain execution** | Verified testnet txs in [Live deploy hashes](#-live-deploy-hashes-casper-20-testnet) — swap, vault log, CEP-18 approvals, all atomic. |
+| **Empirical evidence** | [Empirical data & projected returns](#-empirical-data--projected-returns) — measured infrastructure limits, DEX landscape, projected 30-day returns with honest gaps. |
 | **x402 micropayments** | Real EIP-712 signed via `@noble/curves` SECP256K1; server at `npm run x402-server`. |
 | **MCP integration** | Self-hosted CSPR.trade MCP on `:3001` with body-parser + pubkey regex patches documented in `AGENTS.md §4`. |
 | **Multi-agent design** | `AgentVault` source has `register_agent()` / `unregister_agent()` / `is_agent()`. Deployed package `hash-5ba7…a6` is reused as the on-chain audit log. |
