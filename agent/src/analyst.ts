@@ -118,7 +118,7 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
   }
 
   // 4) DEX quote for the strategy — dynamic pair selection (MCP - optional)
-  const amountIn = input.revenueEvent.amount;
+  let amountIn = input.revenueEvent.amount;
 
   // 4a) Circuit breaker: pause the agent if drawdown or revert streak breached
   //     Defaults: 10% drawdown from peak portfolio, 3 reverted txs in a row.
@@ -238,8 +238,15 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
         tokenOut: decision.tokenOut,
         minAmountOut: '0',
         rationale: `[FORCED HOLD] User-selected action via dashboard`,
-        confidence: 0,
+        // confidence floored to 60 so index.ts lets the executor run
+        // and write the audit-log entry. The executor's HOLD branch
+        // (amountIn='0') still skips the swap submit.
+        confidence: Math.max(decision.confidence ?? 60, 60),
       };
+      // Force amountIn to '0' so executor's HOLD short-circuit fires.
+      // Set pair to 'HOLD' as a belt-and-braces signal.
+      amountIn = '0';
+      quote.pair = 'HOLD';
     } else if (forced === 'stake') {
       decision = {
         action: 'stake',
@@ -265,17 +272,14 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
   let validatorPk: string | undefined;
   if (decision.action === 'stake') {
     pairLabel = 'CSPR/staked';
-    try {
-      const { getAuctionValidators, FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
-      const validators = await getAuctionValidators();
-      const active = validators.filter(v => v.isActive);
-      const picked = active[0]?.publicKey ?? FALLBACK_TESTNET_VALIDATORS[0];
-      validatorPk = process.env.STAKING_VALIDATOR_PUBKEY ?? picked;
-    } catch {
-      // staking module not available, fall back to first known
-      const { FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
-      validatorPk = FALLBACK_TESTNET_VALIDATORS[0];
-    }
+    // Use the first known testnet validator as the default. The auction
+    // RPC has 18,528 bids and a live fetch adds ~10-15s latency which
+    // breaks the demo deadline — for the buildathon we pick from the
+    // hardcoded fallback list. A production agent would call
+    // `getAuctionValidators()` and rank by `delegation_rate`.
+    const { FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
+    validatorPk = process.env.STAKING_VALIDATOR_PUBKEY ?? FALLBACK_TESTNET_VALIDATORS[0];
+    console.log(`[analyst] stake validator: ${validatorPk.slice(0, 16)}…`);
   }
 
   return {

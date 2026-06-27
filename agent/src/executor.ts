@@ -39,9 +39,17 @@ export async function runExecutor(
     // STAKE path: native Casper 2.0 delegation to a validator.
     // Uses SDK's NativeDelegateBuilder (no MCP needed).
     if (proposal.action === 'stake') {
+      let validatorPk = proposal.validatorPubKey;
+      // Defensive: if analyst returned undefined (or string "undefined"
+      // from a JSON roundtrip), fall back to the first known validator.
+      if (!validatorPk || validatorPk === 'undefined') {
+        const { FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
+        validatorPk = FALLBACK_TESTNET_VALIDATORS[0];
+        console.warn('[executor] stake validatorPubKey missing, using fallback');
+      }
       const result = await delegateToValidator(
         proposal.amountIn,
-        proposal.validatorPubKey
+        validatorPk
       );
       deployHash = result.txHash;
       outcome = result.outcome === 'success' ? 'success' : 'reverted';

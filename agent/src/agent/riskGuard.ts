@@ -26,7 +26,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 export interface CircuitBreakerState {
   tripped: boolean;
@@ -57,7 +57,30 @@ const DEFAULT_STATE: RiskState = {
   totalReverts: 0,
 };
 
-const STATE_PATH = join(process.cwd(), 'agent', '.arwa-risk.json');
+// State file lives next to the agent package regardless of CWD.
+// Walk up from this file's location until we find a sibling `package.json`,
+// or fall back to `<cwd>/.arwa-risk.json` (covers the common case where the
+// process was launched from inside the agent directory).
+const STATE_PATH = (() => {
+  try {
+    // node_modules layout puts riskGuard.ts at:
+    //   <root>/agent/src/agent/riskGuard.ts (dev)
+    //   <root>/agent/dist/agent/riskGuard.js (prod)
+    // Resolve from this file's directory upward.
+    const thisDir = __dirname;
+    for (const candidate of [
+      join(thisDir, '..', '..', '..', '.arwa-risk.json'),  // src/ -> agent/
+      join(thisDir, '..', '..', '.arwa-risk.json'),         // dist/ -> agent/
+      join(process.cwd(), '.arwa-risk.json'),
+    ]) {
+      const parent = resolve(candidate);
+      if (existsSync(resolve(parent, '..', 'package.json'))) {
+        return parent;
+      }
+    }
+  } catch {}
+  return join(process.cwd(), '.arwa-risk.json');
+})();
 
 /**
  * Trip-cooldown: once the breaker trips, hold it open for this long
