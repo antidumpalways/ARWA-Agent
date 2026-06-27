@@ -37,7 +37,8 @@
 15. [User actions required](#-user-actions-required)
 16. [Empirical data & projected returns](#-empirical-data--projected-returns)
 17. [Submission readiness](#-submission-readiness-casper-agentic-buildathon-2026)
-18. [Resources](#-resources)
+18. [Future roadmap](#-future-roadmap-post-buildathon)
+19. [Resources](#-resources)
 
 ---
 
@@ -922,13 +923,14 @@ cycle absorbed.
 | **MCP integration** | Self-hosted CSPR.trade MCP on `:3001` with body-parser + pubkey regex patches documented in `AGENTS.md §4`. |
 | **Multi-agent design** | `AgentVault` source has `register_agent()` / `unregister_agent()` / `is_agent()`. Deployed package `hash-5ba7…a6` is reused as the on-chain audit log. |
 | **Generic RWA primitive** | [Business narrative](#-business-narrative-solving-real-world-rwa-liquidity) shows the same contract shape works for parking, rentals, royalties, carbon credits, solar. |
+| **Post-hackathon roadmap** | [Future roadmap](#-future-roadmap-post-buildathon) — v0.9 chain-agnostic RWA, v1.0 mainnet, v1.1+ bridges (conditional). Shows this is a platform, not a one-off. |
 | **Production readiness** | [Architecture Scalability section](#-architecture-scalability--production-readiness) maps every component to a real status (✅ real, 🟡 code-path real, demo runs heuristic). |
 
 ### Submission checklist (for the team)
 
 - [x] Repo on GitHub: <https://github.com/antidumpalways/ParkFlow-Agent>
 - [x] `AGENTS.md` with full project context for judges / future maintainers
-- [x] README v0.8.0 with verified end-to-end txs and production gap analysis
+- [x] README v0.8.1 with verified end-to-end txs, empirical data, multi-pair + circuit breaker, post-buildathon roadmap
 - [x] `npm run setup` one-command deploy
 - [x] Frontend with animated pipeline + embedded dashboard (`frontend/index.html`)
 - [ ] 5-minute demo video (suggested script below)
@@ -946,6 +948,77 @@ cycle absorbed.
 8. **4:00** — Walk through the "Generic RWA primitive" table: parking → rentals → royalties.
 9. **4:30** — Show the "Production gaps" table — what's ✅, what's 🟡, what it would take.
 10. **5:00** — Out: link to repo + AGENTS.md + DoraHacks submission.
+
+---
+
+## 🛣 Future roadmap (post-buildathon)
+
+> This section is intentionally **not** part of v0.8.1 (the submission).
+> It exists so judges can see where the project goes after the hackathon
+> and so contributors know what to pick up next. The priorities are
+> ordered by **submission-criteria impact × build cost**.
+
+### What we deliberately did NOT do in v0.8.1 (and why)
+
+| Candidate feature | Why deferred | What's needed to add it |
+|-------------------|--------------|-------------------------|
+| **Cross-chain bridge** (CSPR ↔ ETH/Solana) | All RWA yield primitives live on Casper in 2026 (sCSPR, CSPR.trade DEX, native staking). Bridge adds 1–3 min latency + trust assumption that breaks "real-time autonomous" narrative. Bridge testnet liquidity is also thin. | Pick a bridge (Wormhole / LayerZero / custom Casper ↔ X). Confirm testnet liquidity on both sides. Add oracle for cross-chain price + slippage. Security review. |
+| **30-day historical backtest** | CSPR.trade testnet is too new (2026) for 30-day candles. We have only ~weeks of data. | Either run a 30-day forward test on testnet, or use mainnet CSPR.trade data (different risk profile). |
+| **Impermanent-loss modelling** | The CSPR.trade MCP exposes `get_impermanent_loss` but we have not wired it into the LP decision yet. The fee-APY estimate in `pairSelector.ts` ignores IL. | Call `get_impermanent_loss({ pair, account_public_key })` before any `add_liquidity`. Reject if projected IL > fee APY over the strategy horizon. |
+| **Multi-agent coordination** | `AgentVault.register_agent()` is in the contract source, but the production code path (TypeScript orchestration across multiple agent processes) is not wired. | Shared queue (Redis), leader election, `is_agent` gate before each executor run, vault log aggregation across agents. |
+| **Real CSPR.cloud x402 facilitator** | Server already forwards to `x402-facilitator.cspr.cloud/verify` + `/settle` (see `scripts/x402Server.ts:forwardToFacilitator`), but the buildathon allowlist is not yet open to our wallet. | Wait for Casper to grant our wallet facilitator access, or run a sponsored facilitator. |
+| **Real CEP-18 per-account balance read** | The cep18 v1.2.0 pre-built from `casper-ecosystem/cep18` uses Casper 1.x era dictionary item-key encoding. We work around it with total-supply proxy + raw `transfer` calls. | Build cep18 from source with Odra 2.7 (Casper 2.0 ABI), or wait for an Odra-native CEP-18 template. |
+| **Web dashboard beyond `index.html`** | The current dashboard is a single static `index.html` with SSE. Good enough for demo, not for production. | React/Vite, JWT auth, persistent cycle history, multi-agent view. |
+
+### v0.9.0 — "Chain-agnostic RWA" (Q3 2026 target)
+
+**Theme**: RWA revenue originates **anywhere**, ARWA routes it on Casper.
+
+| Feature | Scope | Build cost |
+|---------|-------|------------|
+| Stripe webhook → `emit_revenue` adapter | RWA = parking lot operator's Stripe account. Stripe webhook hits a thin HTTP→on-chain bridge, calls `emit_revenue(amount, asset, source, reference)` with the Stripe charge id in `reference`. | ~1 day |
+| IoT MQTT bridge (parking gate sensor) | Edge device publishes to MQTT broker; a Casper-side worker subscribes, batches events, calls `emit_revenue` per gate. | ~3 days (hardware-dependent) |
+| Bank API adapter (rental property) | Plaid (or local bank) → monthly rent detected → `emit_revenue` with property id in `reference`. | ~2 days |
+| Proper AgentVault redeploy | Build the full `agent_vault.wasm` with `execute_strategy` / `register_agent` / `deposit` / `withdraw` using cargo-odra 0.1.7+ on a Linux runner (Windows PATH workaround). | ~2 days |
+
+**Why this, not bridge**: same RWA-narrative value, but stays on Casper's
+single security model, single fee currency, single finality.
+
+### v1.0.0 — "Mainnet-ready" (Q4 2026 target)
+
+**Theme**: from hackathon demo to production multi-agent platform.
+
+| Feature | Scope | Build cost |
+|---------|-------|------------|
+| Mainnet deploy (Casper 1.x era chains) | Switch `CASPER_RPC_URL`, re-run `npm run setup`, top up wallet with real CSPR. | ~1 day |
+| Multi-tenant AgentVault | One vault per operator (mall chain, airport chain), shared `register_agent` allowlist across them. | ~1 week |
+| TLS + reverse proxy + auth | Caddy + OAuth for the signal server and backend. | ~1 week |
+| Persistent state (Redis / SQLite) | Replace in-memory `Set` for x402 nonces, event log, forecast cache. | ~3 days |
+| LLM audit trail | Persist full LLM prompt + response to vault log entry (currently only rationale is recorded). | ~2 days |
+| Mainnet CSPR.trade MCP (drop the body-parser patch) | Remove the `'10mb'` workaround once we're on mainnet infrastructure with higher body limits. | trivial |
+
+### v1.1.0+ — "Multi-chain" (Q1 2027+ target, conditional)
+
+**Theme**: bridge support, only if RWA use case actually needs it.
+
+| Feature | Trigger | Build cost |
+|---------|---------|------------|
+| CSPR ↔ ETH bridge | An RWA partner originates on Ethereum (real-estate NFT, security token) and wants yield routing via ARWA. | ~1 month (security audit mandatory) |
+| CSPR ↔ Solana bridge | Same pattern, Solana-side RWA. | ~1 month |
+| Cross-chain yield arbitrage | Aave on ETH offers > 10% APY while CSPR.trade offers < 5%; agent bridges to capture spread. | ~2 weeks |
+
+**Decision rule** (for evaluating any future bridge request):
+> We add a bridge **only** when an RWA partner requires it. We do not
+> add bridges speculatively. The agent's value proposition is *RWA
+> yield routing on Casper*, not *generic cross-chain DEX bot*.
+
+### v0.8.1 → v0.9.0 open issues (kept here so they don't get lost)
+
+- [ ] Fix `agent_vault.rs` rebuild on Windows (`cp` + `wasm-opt` on PATH)
+- [ ] Re-test `add_liquidity` on mainnet (107 KB tx fits mainnet RPC limit)
+- [ ] Wire `get_impermanent_loss` into `pairSelector.ts` LP decision
+- [ ] Add `Llama.cpp` or similar local LLM fallback (currently only Anthropic/OpenAI)
+- [ ] Replace demo `npm run simulate` parking revenue with a real IoT simulator
 
 ---
 
