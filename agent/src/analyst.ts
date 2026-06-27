@@ -26,10 +26,11 @@ export interface AnalystInput {
   /**
    * When set, override the analyst's decision with a specific action.
    * Used by the dashboard "force action" toggle so judges can demo
-   * any of the 5 strategy action types on demand.
-   * Valid: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold'
+   * any of the 6 strategy action types on demand.
+   * Valid: 'swap' | 'add_liquidity' | 'remove_liquidity' |
+   *        'compound' | 'hold' | 'stake'
    */
-  forceAction?: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold';
+  forceAction?: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold' | 'stake';
 }
 
 interface DecideArgs {
@@ -226,8 +227,9 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
 
   // 8) Forced action override (dashboard toggle). Overrides the analyst
   //    decision with a specific action so the demo can show any of the
-  //    5 strategy types on demand. The executor handles `hold` by
+  //    6 strategy types on demand. The executor handles `hold` by
   //    skipping the swap and recording the skip on the audit log.
+  //    `stake` routes through Casper native delegation (no DEX needed).
   if (input.forceAction) {
     const forced = input.forceAction;
     if (forced === 'hold') {
@@ -237,6 +239,14 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
         minAmountOut: '0',
         rationale: `[FORCED HOLD] User-selected action via dashboard`,
         confidence: 0,
+      };
+    } else if (forced === 'stake') {
+      decision = {
+        action: 'stake',
+        tokenOut: 'CSPR', // stake keeps the CSPR; no DEX token out
+        minAmountOut: '0',
+        rationale: `[FORCED STAKE] Native delegate via Casper 2.0 auction (~7-9% APY, 7d unbond)`,
+        confidence: Math.max(decision.confidence ?? 60, 60),
       };
     } else {
       decision = {
@@ -250,9 +260,27 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
     console.log(`[analyst] forceAction override: ${forced}`);
   }
 
+  // For stake action, set pair label and pick a validator if not forced.
+  let pairLabel = quote.pair;
+  let validatorPk: string | undefined;
+  if (decision.action === 'stake') {
+    pairLabel = 'CSPR/staked';
+    try {
+      const { getAuctionValidators, FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
+      const validators = await getAuctionValidators();
+      const active = validators.filter(v => v.isActive);
+      const picked = active[0]?.publicKey ?? FALLBACK_TESTNET_VALIDATORS[0];
+      validatorPk = process.env.STAKING_VALIDATOR_PUBKEY ?? picked;
+    } catch {
+      // staking module not available, fall back to first known
+      const { FALLBACK_TESTNET_VALIDATORS } = await import('./casper/staking');
+      validatorPk = FALLBACK_TESTNET_VALIDATORS[0];
+    }
+  }
+
   return {
     action: decision.action,
-    pair: quote.pair,
+    pair: pairLabel,
     tokenIn: 'CSPR',
     tokenOut: decision.tokenOut,
     amountIn,
@@ -261,6 +289,7 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
     confidence: decision.confidence,
     x402Proof,
     revenueEvent: input.revenueEvent,
+    validatorPubKey: validatorPk,
   };
 }
 

@@ -20,7 +20,7 @@ export interface Quote {
 }
 
 export interface StrategyProposal {
-  action: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound';
+  action: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'stake';
   pair: string;
   tokenIn: string;
   tokenOut: string;
@@ -30,6 +30,8 @@ export interface StrategyProposal {
   confidence: number;     // 0..100
   x402Proof: X402Proof | null;
   revenueEvent: RevenueEvent;
+  /** Validator pubkey when action === 'stake' */
+  validatorPubKey?: string;
 }
 
 export interface X402Proof {

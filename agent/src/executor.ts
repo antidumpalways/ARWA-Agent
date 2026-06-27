@@ -10,6 +10,7 @@
  */
 import { buildUnsignedDeploy } from './mcp/csprTradeMcp';
 import { logStrategyToVault } from './casper/vaultClient';
+import { delegateToValidator, undelegateFromValidator } from './casper/staking';
 import { recordStrategyOutcome, updatePortfolioSnapshot } from './agent/riskGuard';
 import { loadConfig } from './config';
 import { ExecutionResult, StrategyProposal } from './types';
@@ -35,6 +36,19 @@ export async function runExecutor(
       throw new Error('hold-short-circuit');
     }
 
+    // STAKE path: native Casper 2.0 delegation to a validator.
+    // Uses SDK's NativeDelegateBuilder (no MCP needed).
+    if (proposal.action === 'stake') {
+      const result = await delegateToValidator(
+        proposal.amountIn,
+        proposal.validatorPubKey
+      );
+      deployHash = result.txHash;
+      outcome = result.outcome === 'success' ? 'success' : 'reverted';
+      console.log('[executor] stake tx', deployHash, outcome);
+      throw new Error('stake-handled'); // skip the MCP path below
+    }
+
     // CSPR.trade MCP build_swap bug: it multiplies amount by 10^9 internally,
     // treating input as already-CSPR value then converting to motes again.
     // Compensate by dividing our motes input by 10^9 so the on-chain value
@@ -55,15 +69,21 @@ export async function runExecutor(
     // 2) Sign using SDK's TransactionV1 (SDK handles correct hash computation)
     const { signAndSubmitSwap } = await import('./casper/signer');
     const result = await signAndSubmitSwap(unsigned as Record<string, any>);
-    
+
     deployHash = result.deployHash;
     const success = result.success;
     console.log('[executor] strategy tx', deployHash, 'success=', success);
     outcome = success ? 'success' : 'reverted';
   } catch (e: any) {
-    console.log('[executor] build failed:', e.message?.slice(0, 150));
-    deployHash = 'failed-' + Date.now().toString(36);
-    outcome = 'failed';
+    if (e?.message === 'stake-handled') {
+      // success — fall through to vault log
+    } else if (e?.message === 'hold-short-circuit') {
+      // success — fall through to vault log
+    } else {
+      console.log('[executor] build failed:', e.message?.slice(0, 150));
+      deployHash = 'failed-' + Date.now().toString(36);
+      outcome = 'failed';
+    }
   }
 
   // 4) Log to on-chain AgentVault (optional - may fail on Casper 2.0 testnet)
