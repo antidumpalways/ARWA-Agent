@@ -23,6 +23,13 @@ export interface AnalystInput {
   signalPriceMotes: string;
   /** When true, skip the LLM call and use the deterministic heuristic. */
   forceHeuristic?: boolean;
+  /**
+   * When set, override the analyst's decision with a specific action.
+   * Used by the dashboard "force action" toggle so judges can demo
+   * any of the 5 strategy action types on demand.
+   * Valid: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold'
+   */
+  forceAction?: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold';
 }
 
 interface DecideArgs {
@@ -215,6 +222,32 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
       rationale: `[LLM] ${llmResult.rationale}`,
       confidence: llmResult.confidence,
     };
+  }
+
+  // 8) Forced action override (dashboard toggle). Overrides the analyst
+  //    decision with a specific action so the demo can show any of the
+  //    5 strategy types on demand. The executor handles `hold` by
+  //    skipping the swap and recording the skip on the audit log.
+  if (input.forceAction) {
+    const forced = input.forceAction;
+    if (forced === 'hold') {
+      decision = {
+        action: 'swap', // coerced to no-op when amountIn='0' in executor
+        tokenOut: decision.tokenOut,
+        minAmountOut: '0',
+        rationale: `[FORCED HOLD] User-selected action via dashboard`,
+        confidence: 0,
+      };
+    } else {
+      decision = {
+        action: forced === 'compound' ? 'add_liquidity' : forced,
+        tokenOut: selectedTokenOut,
+        minAmountOut: applySlippage(quote.amountOut, 0.5),
+        rationale: `[FORCED ${forced.toUpperCase()}] User-selected action via dashboard`,
+        confidence: Math.max(decision.confidence ?? 60, 60),
+      };
+    }
+    console.log(`[analyst] forceAction override: ${forced}`);
   }
 
   return {

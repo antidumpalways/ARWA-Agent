@@ -167,6 +167,7 @@ app.post('/api/cycle', async (req, res) => {
     const result = await runCycle({
       revenueEvent: event,
       ownerAddress: req.body.ownerAddress ?? cfg.AGENT_PUBLIC_KEY ?? '',
+      forceAction: req.body.forceAction,
     });
     cycleHistory.unshift({ ts: Date.now(), result });
     if (cycleHistory.length > 50) cycleHistory.length = 50;

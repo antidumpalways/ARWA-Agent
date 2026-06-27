@@ -14,9 +14,10 @@ import { getAgentKeys } from './casper/signer';
 export async function runCycle(input: {
   revenueEvent: RevenueEvent;
   ownerAddress: string;
+  forceAction?: 'swap' | 'add_liquidity' | 'remove_liquidity' | 'compound' | 'hold';
 }): Promise<{ proposal: any; execution: any; tokenBalance?: { balance: string; source: string; display: string } }> {
   const cfg = loadConfig();
-  console.log('[cycle] start');
+  console.log('[cycle] start', input.forceAction ? `forceAction=${input.forceAction}` : '');
 
   // Read the agent's CEP-18 token balance (if a CEP-18 is configured).
   // Best-effort: if no token deployed or RPC fails, we still run the cycle.
@@ -37,6 +38,7 @@ export async function runCycle(input: {
     ownerAddress: input.ownerAddress,
     signalEndpoint: cfg.X402_SIGNAL_ENDPOINT,
     signalPriceMotes: '1000000',
+    forceAction: input.forceAction,
   });
 
   if (proposal.confidence < 50) {
