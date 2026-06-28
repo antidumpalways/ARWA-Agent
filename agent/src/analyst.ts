@@ -248,13 +248,37 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
       amountIn = '0';
       quote.pair = 'HOLD';
     } else if (forced === 'stake') {
-      decision = {
-        action: 'stake',
-        tokenOut: 'CSPR', // stake keeps the CSPR; no DEX token out
-        minAmountOut: '0',
-        rationale: `[FORCED STAKE] Native delegate via Casper 2.0 auction (~7-9% APY, 7d unbond)`,
-        confidence: Math.max(decision.confidence ?? 60, 60),
-      };
+      // Casper 2.0 testnet reverts with DelegationAmountTooSmall [64557]
+      // when the delegate amount is below 500 CSPR. If the revenue event
+      // is too small for a native delegate, gracefully fall back to
+      // `swap` to sCSPR (which has no minimum). This saves 2.5 CSPR of
+      // gas that would otherwise be burned on a guaranteed revert.
+      const { MIN_STAKE_MOTES } = await import('./casper/staking');
+      const amountBig = BigInt(amountIn || '0');
+      if (amountBig < MIN_STAKE_MOTES) {
+        console.warn(
+          `[analyst] stake requested but amount ${amountIn} motes < ` +
+          `${MIN_STAKE_MOTES} (Casper testnet min delegation); ` +
+          `falling back to swap to sCSPR`
+        );
+        decision = {
+          action: 'swap',
+          tokenOut: selectedTokenOut,
+          minAmountOut: applySlippage(quote.amountOut, 0.5),
+          rationale:
+            `[AUTO-SWAP from stake] amount ${amountIn} motes below ` +
+            `${MIN_STAKE_MOTES} minimum, swapped to sCSPR instead`,
+          confidence: Math.max(decision.confidence ?? 60, 60),
+        };
+      } else {
+        decision = {
+          action: 'stake',
+          tokenOut: 'CSPR', // stake keeps the CSPR; no DEX token out
+          minAmountOut: '0',
+          rationale: `[FORCED STAKE] Native delegate via Casper 2.0 auction (~7-9% APY, 7d unbond)`,
+          confidence: Math.max(decision.confidence ?? 60, 60),
+        };
+      }
     } else {
       decision = {
         action: forced === 'compound' ? 'add_liquidity' : forced,

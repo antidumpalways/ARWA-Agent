@@ -47,6 +47,16 @@ export async function runExecutor(
         validatorPk = FALLBACK_TESTNET_VALIDATORS[0];
         console.warn('[executor] stake validatorPubKey missing, using fallback');
       }
+      // Defense in depth: bail out before submitting if amount is below
+      // the Casper testnet minimum (otherwise we waste 2.5 CSPR on a
+      // guaranteed revert with DelegationAmountTooSmall [64557]).
+      const { MIN_STAKE_MOTES } = await import('./casper/staking');
+      const amountBig = BigInt(proposal.amountIn || '0');
+      if (amountBig < MIN_STAKE_MOTES) {
+        const msg = `stake amount ${proposal.amountIn} motes < ${MIN_STAKE_MOTES} min`;
+        console.warn(`[executor] ${msg} — refusing to submit`);
+        throw new Error(msg);
+      }
       const result = await delegateToValidator(
         proposal.amountIn,
         validatorPk

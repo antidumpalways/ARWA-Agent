@@ -41,6 +41,26 @@ import { ExecutionResult } from '../types';
  * For production, prefer reading the validator set from the auction and
  * picking by lowest `delegation_rate` (highest payout to delegators).
  */
+/**
+ * Minimum delegation amount in motes (500 CSPR).
+ *
+ * Casper 2.0 testnet reverts with `DelegationAmountTooSmall [64557]`
+ * when the delegation amount is below this threshold (verified 2026-06-27
+ * by submitting 1 CSPR which reverted, and 1000 CSPR which succeeded).
+ *
+ * The analyst should not even attempt a native delegate when the
+ * available amount is below this — it would just waste 2.5 CSPR of gas
+ * on a guaranteed revert. Use `swap` to sCSPR for small amounts instead.
+ *
+ * Override via `ARWA_MIN_STAKE_MOTES` env var if a network's minimum
+ * changes or if you want a higher safety buffer.
+ */
+export const MIN_STAKE_MOTES = (() => {
+  const envV = process.env.ARWA_MIN_STAKE_MOTES;
+  if (envV && /^\d+$/.test(envV)) return BigInt(envV);
+  return 500_000_000_000n; // 500 CSPR
+})();
+
 const FALLBACK_TESTNET_VALIDATORS: string[] = [
   '01000019478b67d07c3adc460db360deef6c663ec55ba29db70b458e47022a3d81',
   '010003b919dfb5452365d62c59efbe424a604c419bb611d19df12c8355ff3a3bae',
