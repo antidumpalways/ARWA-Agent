@@ -1,5 +1,5 @@
 [workspace]
-members = ["revenue_emitter", "agent_vault"]
+members = ["revenue_emitter", "agent_vault", "stakeholder_deposit"]
 resolver = "2"
 
 [workspace.package]

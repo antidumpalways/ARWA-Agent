@@ -41,8 +41,9 @@ const CHAIN = process.env.CASPER_CHAIN_NAME ?? 'casper-test';
 // actual consumption. Measured costs on 2026-06-08:
 //   RevenueEmitter 247.5 CSPR, AgentVault 274.5 CSPR. 5% buffer for safety.
 const GAS_BY_CONTRACT: Record<string, string> = {
-  revenue_emitter: '260000000000', // 260 CSPR (was using 247.5)
-  agent_vault:     '290000000000', // 290 CSPR (was using 274.5)
+  revenue_emitter:     '260000000000', // 260 CSPR (was using 247.5)
+  agent_vault:         '290000000000', // 290 CSPR (was using 274.5)
+  stakeholder_deposit: '270000000000', // 270 CSPR (similar size)
 };
 function gasFor(contract: string): string {
   const g = GAS_BY_CONTRACT[contract];
@@ -102,6 +103,18 @@ function specFor(contract: string, ownerHex: string): DeploySpec {
         { name: 'agent',               clType: 'key',  value: accountKey },
         { name: 'max_log_history',     clType: 'u32',  value: '1024' },
         { name: 'min_strategy_amount', clType: 'u256', value: '1000000' },
+      ],
+    };
+  }
+  if (contract === 'stakeholder_deposit') {
+    return {
+      name: 'StakeholderDeposit',
+      key: 'stakeholder_deposit',
+      wasmFile: path.join(WASM_DIR, 'StakeholderDeposit.wasm'),
+      args: [
+        ...cfgArgs,
+        { name: 'owner',       clType: 'key',  value: accountKey },
+        { name: 'max_history', clType: 'u32',  value: '1024' },
       ],
     };
   }
@@ -176,7 +189,7 @@ async function main() {
   // Step 4: deploy in order
   const toDeploy: string[] = ONLY
     ? [ONLY]
-    : ['revenue_emitter', 'agent_vault'];
+    : ['revenue_emitter', 'agent_vault', 'stakeholder_deposit'];
 
   const results: Record<string, string> = {};
   if (SKIP_DEPLOY) {
@@ -190,8 +203,10 @@ async function main() {
       };
       const rev = m('REVENUE_EMITTER_CONTRACT_HASH');
       const av  = m('AGENT_VAULT_CONTRACT_HASH');
-      if (rev) results['revenue_emitter'] = rev;
-      if (av)  results['agent_vault']     = av;
+      const sd  = m('STAKEHOLDER_DEPOSIT_CONTRACT_HASH');
+      if (rev) results['revenue_emitter']     = rev;
+      if (av)  results['agent_vault']         = av;
+      if (sd)  results['stakeholder_deposit'] = sd;
     }
     if (Object.keys(results).length === 0) {
       throw new Error('--skip-deploy but no contract hashes found in .env.local');
@@ -222,6 +237,9 @@ async function main() {
   }
   if (results['agent_vault']) {
     lines.push(`AGENT_VAULT_CONTRACT_HASH=${results['agent_vault']}`);
+  }
+  if (results['stakeholder_deposit']) {
+    lines.push(`STAKEHOLDER_DEPOSIT_CONTRACT_HASH=${results['stakeholder_deposit']}`);
   }
   lines.push(`CASPER_NETWORK=${CHAIN === 'casper' ? 'casper' : 'casper-test'}`);
   lines.push('');

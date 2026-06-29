@@ -18,6 +18,7 @@ const EnvSchema = z.object({
   // Deployed contracts (filled by deploy script)
   AGENT_VAULT_CONTRACT_HASH: z.string().optional(),
   REVENUE_EMITTER_CONTRACT_HASH: z.string().optional(),
+  STAKEHOLDER_DEPOSIT_CONTRACT_HASH: z.string().optional(),
 
   // CSPR.cloud
   CSPR_CLOUD_API_KEY: z.string().min(1),

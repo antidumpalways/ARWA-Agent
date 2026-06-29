@@ -7,3 +7,6 @@ fqn = "revenue_emitter::revenue_emitter::RevenueEmitter"
 
 [[contracts]]
 fqn = "agent_vault::agent_vault::AgentVault"
+
+[[contracts]]
+fqn = "stakeholder_deposit::stakeholder_deposit::StakeholderDeposit"
