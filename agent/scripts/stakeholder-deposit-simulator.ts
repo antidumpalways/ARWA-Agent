@@ -26,6 +26,7 @@ import {
 import axios from 'axios';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { recordStakeholderDeposit } from '../src/agent/fundState';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -147,6 +148,7 @@ async function main() {
       try {
         const txHash = await makeDeposit(sk, sh);
         const amountCspr = randomIn(sh.amountRange);
+        const amountMotes = BigInt(Math.floor(amountCspr * 1e9));
         console.log(
           `[deposit-sim] ${new Date().toISOString()} ` +
           `${sh.label.padEnd(28)} ` +
@@ -154,6 +156,10 @@ async function main() {
           `${amountCspr.toFixed(2).padStart(8)} CSPR ` +
           `→ ${txHash}`
         );
+        // v0.8.2: record this deposit in the local fund state cache so
+        // the dashboard's /api/fund endpoint reflects real activity
+        // without needing to query Odra state directly.
+        recordStakeholderDeposit(amountMotes.toString());
         lastRun[sh.label] = now;
         totalDeposits += 1;
       } catch (e: any) {

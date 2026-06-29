@@ -17,6 +17,7 @@ import {
 } from './casper/vaultCustodian';
 import { delegateToValidator, undelegateFromValidator } from './casper/staking';
 import { recordStrategyOutcome, updatePortfolioSnapshot } from './agent/riskGuard';
+import { recordPositionOpened, recordCustodianDeposit } from './agent/fundState';
 import { loadConfig } from './config';
 import { ExecutionResult, StrategyProposal } from './types';
 
@@ -81,6 +82,8 @@ export async function runExecutor(
             deployHash
           );
           console.log('[executor] vault stake position opened', posTx);
+          recordPositionOpened();
+          recordCustodianDeposit(proposal.amountIn);
         } catch (e: any) {
           console.warn('[executor] vault stake position record failed:',
             e?.message?.slice(0, 100));
@@ -132,6 +135,8 @@ export async function runExecutor(
           kind, target, proposal.amountIn, deployHash
         );
         console.log('[executor] vault position opened', posTx);
+        recordPositionOpened();
+        recordCustodianDeposit(proposal.amountIn);
       } catch (e: any) {
         console.warn('[executor] vault position record failed (non-critical):',
           e?.message?.slice(0, 100));

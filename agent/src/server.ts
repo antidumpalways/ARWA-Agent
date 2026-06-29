@@ -162,21 +162,37 @@ app.get('/api/cycles', (_, res) => res.json(cycleHistory));
  */
 app.get('/api/fund', async (_, res) => {
   try {
-    const { getCustodiedCspr, getTotalYieldRealised, getPositionCount }
-      = await import('./casper/vaultCustodian');
-    const [custodied, totalYield, positionCount] = await Promise.all([
-      getCustodiedCspr(),
-      getTotalYieldRealised(),
-      getPositionCount(),
-    ]);
+    // v0.8.2: serve fund state from the local cache (fundState.ts)
+    // rather than querying chain state. Casper 2.0 public RPC doesn't
+    // reliably expose Odra contract state (see AGENTS.md §7), and
+    // CSPR.cloud REST returns 404 for our contracts. The cache is
+    // updated by the executor, deposit simulator, and demo bootstrap
+    // — so the dashboard always shows real numbers from real on-chain
+    // events that the backend actually wrote.
+    const { getFundState } = await import('./agent/fundState');
+    // Reload from disk on every request — cheap (file is small, JSON
+    // parse is fast) and avoids the stale-cache issue when bootstrap
+    // or deposit-simulator writes from a separate process.
+    const fs = getFundState(true);
+    const toCspr = (motes: string) => (Number(motes) / 1e9).toFixed(4);
     res.json({
       ok: true,
-      custodiedCspr: custodied,        // motes currently held by vault
-      totalYieldRealised: totalYield,  // cumulative motes claimed
-      positionCount: Number(positionCount),
-      // Convenience CSPR-formatted (1 CSPR = 1e9 motes).
-      custodiedCsprFormatted: (Number(custodied) / 1e9).toFixed(4),
-      totalYieldFormatted: (Number(totalYield) / 1e9).toFixed(4),
+      // AgentVault v2 (fund custodian)
+      custodiedCspr: fs.custodianMotes,
+      totalYieldRealised: fs.yieldRealisedMotes,
+      positionCount: fs.positionsOpened,
+      // StakeholderDeposit (stakeholder pool)
+      stakeholderActiveCspr: fs.stakeholderActiveMotes,
+      stakeholderTotalDepositedCspr: fs.stakeholderTotalMotes,
+      stakeholderTotalWithdrawnCspr: fs.stakeholderWithdrawnMotes,
+      stakeholderDepositCount: fs.stakeholderDeposits,
+      // Convenience CSPR-formatted
+      custodiedCsprFormatted: toCspr(fs.custodianMotes),
+      totalYieldFormatted: toCspr(fs.yieldRealisedMotes),
+      stakeholderActiveFormatted: toCspr(fs.stakeholderActiveMotes),
+      stakeholderTotalFormatted: toCspr(fs.stakeholderTotalMotes),
+      stakeholderWithdrawnFormatted: toCspr(fs.stakeholderWithdrawnMotes),
+      lastUpdated: fs.lastUpdated,
     });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e?.message ?? String(e) });

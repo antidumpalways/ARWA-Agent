@@ -49,6 +49,7 @@ agent/backend.log
 agent/.parkflow-events.json
 agent/.arwa-events.json
 agent/.arwa-risk.json
+agent/.arwa-fund-state.json
 
 # CEP-18 build artifacts (built locally; not committed)
 agent/wasm-cep18/

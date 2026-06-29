@@ -149,6 +149,39 @@ export async function withdrawForStrategy(
 }
 
 /**
+ * Helper: read a U256 / u64 / string value from a contract's state via
+ * CSPR.cloud REST endpoint `/contracts/{hash}/state?path=...`. Returns
+ * null on any error (caller should handle).
+ *
+ * This is the supported read path for Casper 2.0 — raw `state_get_item`
+ * requires a valid state_root_hash and is not always reliably
+ * accessible from the public RPC.
+ */
+async function readContractValue(
+  contractHash: string,
+  storagePath: string[]
+): Promise<unknown> {
+  const cfg = loadConfig();
+  if (!contractHash) return null;
+  try {
+    const r = await axios.get(
+      `${cfg.CASPER_RPC_URL.replace(/\/rpc$/, '')}/contracts/${encodeURIComponent(contractHash)}/state`,
+      {
+        params: { path: storagePath.join(',') },
+        headers: cfg.CSPR_CLOUD_API_KEY
+          ? { Authorization: cfg.CSPR_CLOUD_API_KEY }
+          : {},
+        timeout: 15_000,
+      },
+    );
+    // Response shape: { data: <CLValue-like object> }
+    return r.data?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read-side: custodied CSPR (current amount held by vault) in motes.
  * Returns "0" on error so callers can gracefully degrade.
  */
@@ -156,24 +189,8 @@ export async function getCustodiedCspr(): Promise<string> {
   const cfg = loadConfig();
   const v = cfg.ARWA_AGENT_VAULT_CONTRACT_HASH;
   if (!v) return '0';
-  try {
-    const r = await axios.post(cfg.CASPER_RPC_URL, {
-      jsonrpc: '2.0', id: 1,
-      method: 'state_get_item',
-      params: {
-        state_root_hash: '0000000000000000000000000000000000000000000000000000000000000000',
-        key: v,
-        path: ['custodied_cspr'],
-      },
-    }, {
-      headers: cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {},
-      timeout: 15_000,
-    });
-    // CLValue bytes; return raw string for now (frontend formats).
-    return r.data?.result?.stored_value?.CLValue?.parsed ?? '0';
-  } catch {
-    return '0';
-  }
+  const parsed = await readContractValue(v, ['custodied_cspr']);
+  return parsed !== null ? String(parsed) : '0';
 }
 
 /** Cumulative yield realised by the vault, in motes. */
@@ -181,23 +198,8 @@ export async function getTotalYieldRealised(): Promise<string> {
   const cfg = loadConfig();
   const v = cfg.ARWA_AGENT_VAULT_CONTRACT_HASH;
   if (!v) return '0';
-  try {
-    const r = await axios.post(cfg.CASPER_RPC_URL, {
-      jsonrpc: '2.0', id: 1,
-      method: 'state_get_item',
-      params: {
-        state_root_hash: '0000000000000000000000000000000000000000000000000000000000000000000',
-        key: v,
-        path: ['total_yield_realised'],
-      },
-    }, {
-      headers: cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {},
-      timeout: 15_000,
-    });
-    return r.data?.result?.stored_value?.CLValue?.parsed ?? '0';
-  } catch {
-    return '0';
-  }
+  const parsed = await readContractValue(v, ['total_yield_realised']);
+  return parsed !== null ? String(parsed) : '0';
 }
 
 /** Number of active + closed positions tracked by the vault. */
@@ -205,21 +207,44 @@ export async function getPositionCount(): Promise<number> {
   const cfg = loadConfig();
   const v = cfg.ARWA_AGENT_VAULT_CONTRACT_HASH;
   if (!v) return 0;
-  try {
-    const r = await axios.post(cfg.CASPER_RPC_URL, {
-      jsonrpc: '2.0', id: 1,
-      method: 'state_get_item',
-      params: {
-        state_root_hash: '0000000000000000000000000000000000000000000000000000000000000000000',
-        key: v,
-        path: ['position_count'],
-      },
-    }, {
-      headers: cfg.CSPR_CLOUD_API_KEY ? { Authorization: cfg.CSPR_CLOUD_API_KEY } : {},
-      timeout: 15_000,
-    });
-    return Number(r.data?.result?.stored_value?.CLValue?.parsed ?? 0);
-  } catch {
-    return 0;
-  }
+  const parsed = await readContractValue(v, ['position_count']);
+  return Number(parsed ?? 0);
+}
+
+// -------- StakeholderDeposit reads --------
+
+/** Total CSPR actively deposited across all stakeholders, in motes. */
+export async function getStakeholderTotalActive(): Promise<string> {
+  const cfg = loadConfig();
+  const v = cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH;
+  if (!v) return '0';
+  const parsed = await readContractValue(v, ['total_active']);
+  return parsed !== null ? String(parsed) : '0';
+}
+
+/** Total CSPR ever deposited (lifetime), in motes. */
+export async function getStakeholderTotalDeposited(): Promise<string> {
+  const cfg = loadConfig();
+  const v = cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH;
+  if (!v) return '0';
+  const parsed = await readContractValue(v, ['total_deposited']);
+  return parsed !== null ? String(parsed) : '0';
+}
+
+/** Total CSPR withdrawn by stakeholders, in motes. */
+export async function getStakeholderTotalWithdrawn(): Promise<string> {
+  const cfg = loadConfig();
+  const v = cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH;
+  if (!v) return '0';
+  const parsed = await readContractValue(v, ['total_withdrawn']);
+  return parsed !== null ? String(parsed) : '0';
+}
+
+/** Number of deposit records (lifetime). */
+export async function getStakeholderDepositCount(): Promise<number> {
+  const cfg = loadConfig();
+  const v = cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH;
+  if (!v) return 0;
+  const parsed = await readContractValue(v, ['deposit_count']);
+  return Number(parsed ?? 0);
 }

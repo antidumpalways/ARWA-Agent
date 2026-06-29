@@ -10,6 +10,7 @@
 import { readFileSync } from 'fs';
 import { PrivateKey, KeyAlgorithm } from 'casper-js-sdk';
 import { depositForStrategy, getCustodiedCspr } from '../src/casper/vaultCustodian';
+import { recordCustodianDeposit } from '../src/agent/fundState';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -35,6 +36,7 @@ async function main() {
     'demo-bootstrap-rental-pool',
   );
   console.log('  tx:', txHash);
+  recordCustodianDeposit(DEPOSIT_AMOUNT_MOTES);
 
   // Wait + re-read
   await new Promise(r => setTimeout(r, 5000));

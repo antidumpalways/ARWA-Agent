@@ -343,12 +343,12 @@
           </div>
           <!-- Card 4: Fund (v0.8.1+) -->
           <div class="bg-cardBg border border-slate-800 rounded-xl p-5">
-            <h3 class="text-xs uppercase tracking-widest text-slate-500 mb-4">Fund (Stakeholder) <span class="bg-arwaRed/20 text-arwaRed text-[10px] px-2 py-0.5 rounded-full ml-2">v0.8.1</span></h3>
+            <h3 class="text-xs uppercase tracking-widest text-slate-500 mb-4">Fund <span class="bg-arwaRed/20 text-arwaRed text-[10px] px-2 py-0.5 rounded-full ml-2">v0.8.2</span></h3>
             <div class="flex gap-2 mb-3">
               <div class="bg-slate-950 rounded-lg p-3 flex-1">
-                <span class="text-[10px] text-slate-500 uppercase">AUM</span>
+                <span class="text-[10px] text-slate-500 uppercase">AUM (vault)</span>
                 <div id="fund-aum" class="text-2xl font-extrabold text-arwaRed">0.0000</div>
-                <div class="text-[10px] text-slate-600">CSPR custodied</div>
+                <div class="text-[10px] text-slate-600">CSPR in AgentVault v2</div>
               </div>
               <div class="bg-slate-950 rounded-lg p-3 flex-1">
                 <span class="text-[10px] text-slate-500 uppercase">Yield</span>
@@ -362,11 +362,19 @@
                 <div id="fund-positions" class="text-xl font-bold text-white">0</div>
               </div>
               <div class="bg-slate-950 rounded-lg p-3 flex-1">
-                <span class="text-[10px] text-slate-500 uppercase">Source</span>
-                <div class="text-xs text-white">StakeholderDeposit</div>
+                <span class="text-[10px] text-slate-500 uppercase">Deposits</span>
+                <div id="fund-sh-count" class="text-xl font-bold text-white">0</div>
+                <div class="text-[10px] text-slate-600">lifetime</div>
               </div>
             </div>
-            <div class="text-[10px] text-slate-500 uppercase mb-1">Vault pkg hash</div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 mb-3">
+              <div class="flex justify-between items-baseline">
+                <span class="text-[10px] text-slate-500 uppercase">Stakeholder Pool (active)</span>
+                <span id="fund-sh-active" class="text-lg font-bold text-[#DAD168]">0.0000 CSPR</span>
+              </div>
+              <div class="text-[10px] text-slate-600 mt-1">CSPR committed by stakeholders via StakeholderDeposit</div>
+            </div>
+            <div class="text-[10px] text-slate-500 uppercase mb-1">AgentVault v2 pkg hash</div>
             <div id="fund-vault-hash" class="text-[10px] text-slate-400 break-all">hash-… (not deployed)</div>
           </div>
         </div>
@@ -437,7 +445,7 @@
 
         async function fetchHealth(){try{const h=await fetch(API_BASE+'/api/health').then(r=>r.json());if(h.ok){setNet('live','Live on '+h.network);document.getElementById('btn-run').disabled=false;document.getElementById('status-line').textContent='Connected — Ready'}if(h.contracts){document.getElementById('link-rev')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.revenue_emitter);document.getElementById('link-vault')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.agent_vault);if(h.contracts.arwa_agent_vault){document.getElementById('fund-vault-hash').textContent=h.contracts.arwa_agent_vault;document.getElementById('fund-vault-hash').onclick=()=>window.open(EXPLORER+'/contract/'+h.contracts.arwa_agent_vault,'_blank');document.getElementById('fund-vault-hash').style.cursor='pointer'}}catch(e){setNet('alert','Backend offline')}}
         async function refreshState(){try{const s=await fetch(API_BASE+'/api/state').then(r=>r.json());document.getElementById('kpi-strategies').textContent=s.totalStrategies??0;document.getElementById('kpi-reputation').textContent=s.reputation??0}catch(e){}}
-        async function refreshFund(){try{const f=await fetch(API_BASE+'/api/fund').then(r=>r.json());if(f&&f.ok){document.getElementById('fund-aum').textContent=Number(f.custodiedCsprFormatted||0).toFixed(4);document.getElementById('fund-yield').textContent=Number(f.totalYieldFormatted||0).toFixed(4);document.getElementById('fund-positions').textContent=f.positionCount??0}}catch(e){}}
+        async function refreshFund(){try{const f=await fetch(API_BASE+'/api/fund').then(r=>r.json());if(f&&f.ok){document.getElementById('fund-aum').textContent=Number(f.custodiedCsprFormatted||0).toFixed(4);document.getElementById('fund-yield').textContent=Number(f.totalYieldFormatted||0).toFixed(4);document.getElementById('fund-positions').textContent=f.positionCount??0;document.getElementById('fund-sh-active').textContent=Number(f.stakeholderActiveFormatted||0).toFixed(4);document.getElementById('fund-sh-count').textContent=f.stakeholderDepositCount??0}}catch(e){}}
         async function runAgentCycle(){const btn=document.getElementById('btn-run');btn.disabled=true;const source=document.getElementById('in-source').value;const amountUsd=Number(document.getElementById('in-amount-usd').value);const cspr=amountUsd/0.10;const amountMotes=String(Math.floor(cspr*1e9));const forceAction=document.getElementById('in-force-action').value;document.getElementById('llm-rationale').textContent='"Analyzing on-chain data..."';document.getElementById('status-line').textContent='Running cycle for $'+amountUsd+' on '+source+(forceAction!=='auto'?' [forced: '+forceAction+']':'');try{const reqBody={amount:amountMotes,source,ownerAddress:connectedPubkey||'02agent'};if(forceAction!=='auto')reqBody.forceAction=forceAction;const res=await fetch(API_BASE+'/api/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reqBody)});const data=await res.json();if(!data.ok)throw new Error(data.error||'Cycle failed');if(data.lastSimulated){const t=data.lastSimulated;document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open — Vehicle Exiting';document.getElementById('gate-sub').textContent=t.plat+' parked '+t.durationMin+'min';document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=t.plat;document.getElementById('last-tx-dur').textContent=t.durationMin+' min';document.getElementById('last-tx-cost').textContent='$'+t.costUsd.toFixed(2);document.getElementById('last-tx-motes').textContent=t.motes+' motes';document.getElementById('last-tx-hash').textContent=t.hash}const p=data.proposal;document.getElementById('llm-rationale').textContent='"'+ (p.rationale||'Strategy executed.')+'"';document.getElementById('llm-action').textContent=p.action;document.getElementById('llm-confidence').textContent=(p.confidence||0)+'%';document.getElementById('llm-pair').textContent=p.pair;if(p.x402Proof){document.getElementById('x402-icon').textContent='✓';document.getElementById('x402-label').textContent='x402 Verified · 0.001 CSPR paid'}if(data.execution){recentDecisions.unshift({action:p.action,pair:p.pair,outcome:data.execution.vaultResult?.outcome||'success',tx_hash:data.execution.vaultResult?.txHash||data.execution.txHash});if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions()}document.getElementById('status-line').textContent='✓ Cycle Complete';await refreshState()}catch(e){document.getElementById('llm-rationale').textContent='"'+e.message+'"';document.getElementById('status-line').textContent='✗ '+e.message}finally{btn.disabled=false}}
         function connectEventStream(){try{if(eventSource)eventSource.close();if(new URLSearchParams(window.location.search).get('noSSE')==='1')return;eventSource=new EventSource(API_BASE+'/api/events');eventSource.addEventListener('strategy',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open';if(d.rationale)document.getElementById('llm-rationale').textContent='"'+d.rationale+'"';recentDecisions.unshift(d);if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions();refreshState()}catch{}});eventSource.addEventListener('revenue',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Vehicle Exiting';document.getElementById('gate-sub').textContent='+'+d.amount+' motes from '+d.source;document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=d.source;document.getElementById('last-tx-motes').textContent=d.amount+' motes';document.getElementById('last-tx-hash').textContent=d.reference}catch{}});eventSource.onerror=()=>setNet('alert','SSE Disconnected')}catch(e){}}
         function initDashboard(){document.getElementById('btn-run').addEventListener('click',runAgentCycle);fetchHealth();refreshState();refreshFund();if(new URLSearchParams(window.location.search).get('noPoll')!=='1')setInterval(()=>{fetchHealth();refreshState();refreshFund()},5000);connectEventStream()}
