@@ -19,6 +19,10 @@ const EnvSchema = z.object({
   AGENT_VAULT_CONTRACT_HASH: z.string().optional(),
   REVENUE_EMITTER_CONTRACT_HASH: z.string().optional(),
   STAKEHOLDER_DEPOSIT_CONTRACT_HASH: z.string().optional(),
+  /** v0.8.1+: real fund-custodian AgentVault (new deployment).
+   *  Distinct from AGENT_VAULT_CONTRACT_HASH which is the legacy
+   *  RevenueEmitter package still used as the audit log. */
+  ARWA_AGENT_VAULT_CONTRACT_HASH: z.string().optional(),
 
   // CSPR.cloud
   CSPR_CLOUD_API_KEY: z.string().min(1),

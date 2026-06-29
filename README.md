@@ -1,14 +1,17 @@
-# ARWA — Casper Agentic Buildathon 2026 — v0.8.0
+# ARWA — Casper Agentic Buildathon 2026 — v0.8.2
 
-> **Autonomous multi-agent system that picks up on-chain RWA revenue
-> events, pays for a premium off-chain signal via the [x402][x402]
-> micropayment protocol, routes the proceeds through the CSPR.trade
-> DEX (via MCP), and logs every decision to an on-chain **AgentVault**
-> for verifiable reputation.**
+> **Autonomous multi-agent RWA yield router.** Stakeholders (parking
+> operators, rental owners, royalty issuers) deposit CSPR on-chain,
+> ARWA agents pick up those events, pay for an off-chain AI signal via
+> the [x402][x402] EIP-712 micropayment protocol, route the proceeds
+> through the **CSPR.trade DEX** + **Casper native auction** delegation,
+> and log every decision on-chain for verifiable reputation.
 >
-> **v0.8.0**: Full pipeline working on Casper 2.0 testnet — swap execution
-> + vault logging via TransactionV1 format. Self-hosted CSPR.trade MCP
-> integration. Multi-agent contract support.
+> **v0.8.2**: Real fund custodian flow — `StakeholderDeposit` + redesigned
+> `AgentVault` (fund manager) working end-to-end on Casper 2.0 testnet.
+> 6 strategy actions: `swap`, `stake`, `add_liquidity`, `remove_liquidity`,
+> `compound`, `hold`. Dashboard "Force Action" toggle. Multi-pair selector.
+> Risk circuit breaker with drawdown + revert-streak detection.
 
 [![Caspar 2.0 testnet](https://img.shields.io/badge/Caspar_2.0-testnet-FF6B6B?logo=casper&logoColor=white)](https://testnet.cspr.live)
 [![Odra 2.7](https://img.shields.io/badge/Odra-2.7-5B21B6?logo=rust&logoColor=white)](https://odra.dev)
@@ -44,10 +47,12 @@
 
 ## 💡 What it does
 
-Every time a real-world revenue tick fires for an RWA (e.g. a parking lot,
-a rental property, a royalty stream), the **RevenueEmitter** contract
-pushes a `RevenueEmitted` event on-chain. The ARWA swarm
-picks it up and runs a fully-autonomous decision loop:
+Stakeholders (parking operators, rental owners, royalty issuers) deposit
+CSPR to the **`StakeholderDeposit`** contract — fully on-chain, every
+deposit recorded with source label (e.g. "P1 - Gate Keluar Utama") and
+source kind (parking / rental / royalty). The ARWA agent picks up the
+event and runs a fully-autonomous decision loop on the depositor's funds
+(via the redesigned **`AgentVault`** as custodian):
 
 1. **Analyst** reads the on-chain event, fetches the agent's live
    portfolio via the **CSPR.cloud MCP**, and quotes a route via the
@@ -68,9 +73,14 @@ picks it up and runs a fully-autonomous decision loop:
    - `stake`: builds via SDK's `NativeDelegateBuilder` (protocol-native,
      no MCP), submits same RPC.
    - `hold`: short-circuits, no swap, only writes an audit-log entry.
-   Then it **calls `emit_revenue` on the AgentVault package** to write
-   the decision on-chain for reputation.
-5. The frontend watches the live SSE feed and shows the entire pipeline.
+   On success the agent **records the position in the new AgentVault**
+   (`record_strategy_execution`) and writes an audit-log entry
+   (`emit_revenue`) to the legacy RevenueEmitter package for reputation.
+5. Yield accrual is tracked via `record_yield_realised` after the agent
+   claims rewards from positions. The redesigned AgentVault exposes
+   `get_custodied_cspr`, `get_total_yield_realised`, `get_position_count`
+   for the dashboard's **AUM + realised yield** card.
+6. The frontend watches the live SSE feed and shows the entire pipeline.
    A **"Force Action"** dropdown lets judges demo any of the 6 actions
    on demand.
 
@@ -422,13 +432,17 @@ npm run cycle
 
 > Recorded 2026-06-24 from the latest verified end-to-end run.
 
-### Current (v0.8.0+)
+### Current (v0.8.2+)
 
 | Component                                  | Hash / Identifier                                                       | Notes                                                |
 |--------------------------------------------|-------------------------------------------------------------------------|------------------------------------------------------|
-| **Deployed contract package** (audit log)  | `hash-5ba747dfbf3a6769a79db63198c1c414b85bae1b407777cbc56d53c208ec09a6` | Single deployed package; entry points `emit_revenue` / `set_emitter` / `transfer_ownership` / `paused` (deployed as RevenueEmitter 2026-06-12, reused as on-chain audit log) |
+| **StakeholderDeposit** (v0.8.2, NEW)     | `hash-c0ae4b5dcef3a6aa26154ae3c62aa5768691877d97d81e7ce794046ed7d20f2a` | Stakeholders deposit CSPR with `source_label` / `source_kind`. Deployed 2026-06-28. |
+| **AgentVault v2** (v0.8.2, NEW)          | `hash-ab4608ba784fb8c90928b95a5e8b7b54d12c7e94557ae8e28e3f86e2da3b7b67` | Redesigned with fund custodian methods: `deposit_for_strategy`, `record_strategy_execution`, `record_yield_realised`, `withdraw_for_strategy`. Deployed 2026-06-28. |
+| **AgentVault v1 / RevenueEmitter**        | `hash-5ba747dfbf3a6769a79db63198c1c414b85bae1b407777cbc56d53c208ec09a6` | Legacy package used as audit log (`emit_revenue`). |
 | **Verified on-chain swap** (1 CSPR → sCSPR) | `c44b777e55cf260700e8b00869683bb8d3e57f7c6c7f217edbc414e2ecf22b6f`     | Block `204304a9…`, atomic with vault log              |
-| **Verified on-chain vault log**            | `5ee46d02fafaca54c0aaa8b12b4f30d124be2e3406e67e12f0e9ae693675e746`     | Same block `204304a9…`, via `emit_revenue` fallback   |
+| **Vault log** (audit trail)                | `5ee46d02fafaca54c0aaa8b12b4f30d124be2e3406e67e12f0e9ae693675e746`     | Same block `204304a9…`, via `emit_revenue` fallback   |
+| **Stake tx** (1000 CSPR → validator)       | `b49a9533caf31dcd53b3188c88be53d87a46c28048b397b327bd372d68203868`     | Block `8319426`, success (Casper 2.0 native delegate) |
+| **Stakeholder deposit tx** (1 CSPR)       | `90db119f01bfa9f18515c43522c9c1815b48c4b8a1cf9c16011a53386fc5b865`    | Success, CSPR committed via StakeholderDeposit        |
 | **Approve WCSPR** (for LP)                 | `47bf77c0de00117d19ea5a876cc72ad4a609562a3223c052a243db38ff818704`     | Block `953f1263…`, success                            |
 | **Approve CSPRCAT** (for LP)               | `e8e94e8d449d828c83efcf7360cf74f0a1dd12804d25e6cd723b81cb22ac3e13`     | Block `953f1263…`, success                            |
 

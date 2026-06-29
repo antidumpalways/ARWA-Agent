@@ -10,6 +10,11 @@
  */
 import { buildUnsignedDeploy } from './mcp/csprTradeMcp';
 import { logStrategyToVault } from './casper/vaultClient';
+import {
+  depositForStrategy, recordStrategyExecution, recordYieldRealised,
+  withdrawForStrategy, getCustodiedCspr, getTotalYieldRealised,
+  getPositionCount,
+} from './casper/vaultCustodian';
 import { delegateToValidator, undelegateFromValidator } from './casper/staking';
 import { recordStrategyOutcome, updatePortfolioSnapshot } from './agent/riskGuard';
 import { loadConfig } from './config';
@@ -64,6 +69,24 @@ export async function runExecutor(
       deployHash = result.txHash;
       outcome = result.outcome === 'success' ? 'success' : 'reverted';
       console.log('[executor] stake tx', deployHash, outcome);
+
+      // v0.8.1+: record this validator-delegate position in the new
+      // AgentVault (fund custodian). Non-critical.
+      if (outcome === 'success' && proposal.validatorPubKey) {
+        try {
+          const posTx = await recordStrategyExecution(
+            'validator_delegate',
+            proposal.validatorPubKey,
+            proposal.amountIn,
+            deployHash
+          );
+          console.log('[executor] vault stake position opened', posTx);
+        } catch (e: any) {
+          console.warn('[executor] vault stake position record failed:',
+            e?.message?.slice(0, 100));
+        }
+      }
+
       throw new Error('stake-handled'); // skip the MCP path below
     }
 
@@ -92,6 +115,28 @@ export async function runExecutor(
     const success = result.success;
     console.log('[executor] strategy tx', deployHash, 'success=', success);
     outcome = success ? 'success' : 'reverted';
+
+    // v0.8.1+: record this position in the redesigned AgentVault
+    // (fund custodian). Non-critical — if it fails, we still log
+    // success in the audit log below.
+    if (success && proposal.action !== 'hold') {
+      try {
+        const kind = proposal.action === 'stake' ? 'validator_delegate'
+          : proposal.action === 'add_liquidity' ? 'lp'
+          : proposal.action === 'swap' ? 'sCSPR_swap'
+          : 'other';
+        const target = proposal.action === 'stake' && proposal.validatorPubKey
+          ? proposal.validatorPubKey
+          : proposal.pair;
+        const posTx = await recordStrategyExecution(
+          kind, target, proposal.amountIn, deployHash
+        );
+        console.log('[executor] vault position opened', posTx);
+      } catch (e: any) {
+        console.warn('[executor] vault position record failed (non-critical):',
+          e?.message?.slice(0, 100));
+      }
+    }
   } catch (e: any) {
     if (e?.message === 'stake-handled') {
       // success — fall through to vault log

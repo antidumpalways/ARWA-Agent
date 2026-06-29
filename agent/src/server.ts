@@ -83,6 +83,8 @@ app.get('/api/health', async (_, res) => {
     contracts: {
       revenue_emitter: cfg.REVENUE_EMITTER_CONTRACT_HASH ?? null,
       agent_vault: cfg.AGENT_VAULT_CONTRACT_HASH ?? null,
+      stakeholder_deposit: cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH ?? null,
+      arwa_agent_vault: cfg.ARWA_AGENT_VAULT_CONTRACT_HASH ?? null,
     },
   });
 });
@@ -152,6 +154,34 @@ app.get('/api/events', (req, res) => {
 });
 
 app.get('/api/cycles', (_, res) => res.json(cycleHistory));
+
+/**
+ * v0.8.1+: fund custodian state from the redesigned AgentVault.
+ * Returns AUM, total custodied, total realised yield, position count.
+ * All values in motes; frontend converts to CSPR.
+ */
+app.get('/api/fund', async (_, res) => {
+  try {
+    const { getCustodiedCspr, getTotalYieldRealised, getPositionCount }
+      = await import('./casper/vaultCustodian');
+    const [custodied, totalYield, positionCount] = await Promise.all([
+      getCustodiedCspr(),
+      getTotalYieldRealised(),
+      getPositionCount(),
+    ]);
+    res.json({
+      ok: true,
+      custodiedCspr: custodied,        // motes currently held by vault
+      totalYieldRealised: totalYield,  // cumulative motes claimed
+      positionCount: Number(positionCount),
+      // Convenience CSPR-formatted (1 CSPR = 1e9 motes).
+      custodiedCsprFormatted: (Number(custodied) / 1e9).toFixed(4),
+      totalYieldFormatted: (Number(totalYield) / 1e9).toFixed(4),
+    });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message ?? String(e) });
+  }
+});
 
 app.post('/api/cycle', async (req, res) => {
   try {
