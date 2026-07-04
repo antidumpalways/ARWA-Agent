@@ -18,16 +18,44 @@ import { config } from 'dotenv';
 import { HttpHandler, RpcClient, PrivateKey, KeyAlgorithm, PublicKey } from 'casper-js-sdk';
 import { buildModuleBytesDeploy, buildContractCallDeploy, signAndSubmitDeploy } from '../src/casper/signer';
 
-config({ path: path.join(__dirname, '..', '.env') });
+// Robust repo-root detection: walk upward from this file until we find
+// the directory whose child is `agent/`. Works regardless of whether the
+// user cloned the repo as `ParkFlow-Agent/`, `ARWA-Agent/`, or anything
+// else.
+function findRepoRoot(startDir: string): string {
+  let dir = startDir;
+  for (let i = 0; i < 8; i++) {
+    // Look for `agent/package.json` as our anchor (this `scripts/` dir is
+    // always at `<root>/agent/scripts/`).
+    const candidate = path.join(dir, 'agent', 'package.json');
+    if (existsSync(candidate)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(
+    `Could not find repo root from ${startDir}. ` +
+    `Expected to find <root>/agent/package.json within 8 levels up.`
+  );
+}
 
-const REPO = path.resolve(__dirname, '..', '..');
+const REPO = findRepoRoot(path.resolve(__dirname, '..', '..'));
 const WASM_DIR = path.join(REPO, 'contracts', 'odra', 'wasm');
-const KEYS_DIR = path.join(__dirname, '..', 'keys');
+const KEYS_DIR = path.join(REPO, 'agent', 'keys');
 
-// Use existing key path from .env or default
-const SECRET_KEY_PATH = process.env.AGENT_SECRET_KEY_PATH 
-  ? path.resolve(__dirname, '..', process.env.AGENT_SECRET_KEY_PATH)
-  : path.join(KEYS_DIR, 'agent.pem');
+config({ path: path.join(REPO, 'agent', '.env') });
+
+// Use existing key path from .env or default. The .env value
+// `Account 1_secret_key.pem` is relative to `agent/keys/`, so join
+// `KEYS_DIR` regardless of whether the env var is set or not.
+function resolveSecretKey(): string {
+  const rel = process.env.AGENT_SECRET_KEY_PATH ?? 'agent.pem';
+  // Make relative paths anchor under <repo>/agent/keys/.
+  if (path.isAbsolute(rel)) return rel;
+  return path.join(KEYS_DIR, path.basename(rel));
+}
+const SECRET_KEY_PATH = resolveSecretKey();
+console.log('   🔑 Key path:', SECRET_KEY_PATH);
 
 // Casper testnet config
 const RPC_URL = process.env.CASPER_RPC_URL || 'https://node.testnet.cspr.cloud/rpc';
@@ -161,7 +189,7 @@ async function main() {
 
   // Step 5: Update .env
   console.log('\n📝 Step 5: Update .env');
-  const envPath = path.join(__dirname, '..', '.env');
+  const envPath = path.join(REPO, 'agent', '.env');
   let envContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
   
   // Update or add contract hashes

@@ -14,6 +14,7 @@
  *   - Timestamp(date) / Duration(ms) are plain constructors
  */
 import { readFileSync } from 'fs';
+import * as path from 'path';
 import {
   HttpHandler,
   RpcClient,
@@ -56,7 +57,12 @@ export function getAgentKeys(): {
     return { privateKey: cachedPrivate, publicKey: cachedPublic, algorithm: cachedAlgo };
   }
   const cfg = loadConfig();
-  const pem = readFileSync(cfg.AGENT_SECRET_KEY_PATH, 'utf-8');
+  // Anchor relative paths under <repo>/agent/keys/ for portability
+  // across folder renames. Absolute paths pass through unchanged.
+  const keyPath = path.isAbsolute(cfg.AGENT_SECRET_KEY_PATH)
+    ? cfg.AGENT_SECRET_KEY_PATH
+    : path.join(__dirname, '..', '..', 'keys', path.basename(cfg.AGENT_SECRET_KEY_PATH));
+  const pem = readFileSync(keyPath, 'utf-8');
   try {
     cachedPrivate = PrivateKey.fromPem(pem, KeyAlgorithm.ED25519);
     cachedAlgo = KeyAlgorithm.ED25519;
