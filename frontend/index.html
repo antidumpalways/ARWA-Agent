@@ -280,7 +280,7 @@
             <h2 class="text-xl font-extrabold text-white">ARWA Dashboard</h2>
             <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs"><div id="net-dot" class="w-2 h-2 rounded-full bg-slate-500"></div><span id="net-text">Checking...</span></div>
           </div>
-          <button id="btn-run" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold py-2.5 px-5 rounded-lg disabled:opacity-50" disabled>▶ Run Cycle</button>
+          <button id="btn-run" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold py-2.5 px-5 rounded-lg disabled:opacity-50" disabled>▶ Trigger Deposit &amp; Run Cycle</button>
         </div>
         <div class="flex flex-wrap gap-4 text-sm items-center">
           <div><span class="text-xs text-slate-500 uppercase">Source</span><input id="in-source" class="ml-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm w-40" value="P1 - Main Gate"></div>
@@ -475,7 +475,73 @@
         async function fetchHealth(){try{const h=await fetch(API_BASE+'/api/health').then(r=>r.json());if(h.ok){setNet('live','Live on '+h.network);document.getElementById('btn-run').disabled=false;document.getElementById('status-line').textContent='Connected — Ready'}if(h.contracts){document.getElementById('link-rev')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.revenue_emitter);document.getElementById('link-vault')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.agent_vault);if(h.contracts.arwa_agent_vault){document.getElementById('fund-vault-hash').textContent=h.contracts.arwa_agent_vault;document.getElementById('fund-vault-hash').onclick=()=>window.open(EXPLORER+'/contract/'+h.contracts.arwa_agent_vault,'_blank');document.getElementById('fund-vault-hash').style.cursor='pointer'}}}catch(e){setNet('alert','Backend offline')}}
         async function refreshState(){try{const s=await fetch(API_BASE+'/api/state').then(r=>r.json());document.getElementById('kpi-strategies').textContent=s.totalStrategies??0;document.getElementById('kpi-reputation').textContent=s.reputation??0}catch(e){}}
         async function refreshFund(){try{const f=await fetch(API_BASE+'/api/fund').then(r=>r.json());if(f&&f.ok){document.getElementById('fund-aum').textContent=Number(f.custodiedCsprFormatted||0).toFixed(4);document.getElementById('fund-yield').textContent=Number(f.totalYieldFormatted||0).toFixed(4);document.getElementById('fund-positions').textContent=f.positionCount??0;document.getElementById('fund-sh-active').textContent=Number(f.stakeholderActiveFormatted||0).toFixed(4);document.getElementById('fund-sh-count').textContent=f.stakeholderDepositCount??0}}catch(e){}}
-        async function runAgentCycle(){const btn=document.getElementById('btn-run');btn.disabled=true;const source=document.getElementById('in-source').value;const amountUsd=Number(document.getElementById('in-amount-usd').value);const cspr=amountUsd/0.10;const amountMotes=String(Math.floor(cspr*1e9));const forceAction=document.getElementById('in-force-action').value;document.getElementById('llm-rationale').textContent='"Analyzing on-chain data..."';document.getElementById('status-line').textContent='Running cycle for $'+amountUsd+' on '+source+(forceAction!=='auto'?' [forced: '+forceAction+']':'');try{const reqBody={amount:amountMotes,source,ownerAddress:connectedPubkey||'02agent'};if(forceAction!=='auto')reqBody.forceAction=forceAction;const res=await fetch(API_BASE+'/api/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reqBody)});const data=await res.json();if(!data.ok)throw new Error(data.error||'Cycle failed');if(data.lastSimulated){const t=data.lastSimulated;document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open — Vehicle Exiting';document.getElementById('gate-sub').textContent=t.plat+' parked '+t.durationMin+'min';document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=t.plat;document.getElementById('last-tx-dur').textContent=t.durationMin+' min';document.getElementById('last-tx-cost').textContent='$'+t.costUsd.toFixed(2);document.getElementById('last-tx-motes').textContent=t.motes+' motes';document.getElementById('last-tx-hash').textContent=t.hash}const p=data.proposal;document.getElementById('llm-rationale').textContent='"'+ (p.rationale||'Strategy executed.')+'"';document.getElementById('llm-action').textContent=p.action;document.getElementById('llm-confidence').textContent=(p.confidence||0)+'%';document.getElementById('llm-pair').textContent=p.pair;if(p.x402Proof){document.getElementById('x402-icon').textContent='✓';document.getElementById('x402-label').textContent='x402 Verified · 0.001 CSPR paid'}if(data.execution){recentDecisions.unshift({action:p.action,pair:p.pair,outcome:data.execution.vaultResult?.outcome||'success',tx_hash:data.execution.vaultResult?.txHash||data.execution.txHash});if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions()}document.getElementById('status-line').textContent='✓ Cycle Complete';await refreshState()}catch(e){document.getElementById('llm-rationale').textContent='"'+e.message+'"';document.getElementById('status-line').textContent='✗ '+e.message}finally{btn.disabled=false}}
+        async function runAgentCycle(){
+            const btn=document.getElementById('btn-run');btn.disabled=true;
+            const amountUsd=Number(document.getElementById('in-amount-usd').value);
+            const cspr=amountUsd/0.10;
+            const amountMotes=String(Math.floor(cspr*1e9));
+            const forceAction=document.getElementById('in-force-action').value;
+            // v0.8.2: step 1 - trigger a stakeholder deposit on-chain
+            document.getElementById('llm-rationale').textContent='"Waiting for stakeholder deposit..."';
+            document.getElementById('status-line').textContent='Triggering deposit from random stakeholder...';
+            let depositInfo=null;
+            try{
+                const depRes=await fetch(API_BASE+'/api/simulator/tick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+                depositInfo=await depRes.json();
+                if(!depositInfo.ok){throw new Error(depositInfo.error||'deposit failed');}
+                document.getElementById('status-line').textContent='Deposit OK: '+depositInfo.stakeholder+' ('+depositInfo.sourceKind+') '+depositInfo.amountCspr.toFixed(2)+' CSPR -> '+depositInfo.txHash.slice(0,12)+'...';
+            }catch(e){
+                btn.disabled=false;
+                document.getElementById('status-line').textContent='Deposit failed: '+e.message;
+                document.getElementById('llm-rationale').textContent='"'+e.message+'"';
+                return;
+            }
+            // wait ~3s for the deposit tx to finalise on testnet
+            await new Promise(r=>setTimeout(r,3000));
+            // v0.8.2: step 2 - run the agent cycle on the new deposit
+            document.getElementById('llm-rationale').textContent='"Analyzing on-chain deposit event..."';
+            document.getElementById('status-line').textContent='Running cycle for $'+amountUsd+' on '+depositInfo.stakeholder+(forceAction!=='auto'?' [forced: '+forceAction+']':'');
+            try{
+                const reqBody={amount:amountMotes,source:'deposit:'+depositInfo.stakeholder,ownerAddress:connectedPubkey||'02agent'};
+                if(forceAction!=='auto')reqBody.forceAction=forceAction;
+                const res=await fetch(API_BASE+'/api/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reqBody)});
+                const data=await res.json();
+                if(!data.ok)throw new Error(data.error||'Cycle failed');
+                if(data.lastSimulated){
+                    const t=data.lastSimulated;
+                    document.getElementById('gate-icon').classList.add('bg-arwaRed');
+                    document.getElementById('gate-state').textContent='Gate Open - Vehicle Exiting';
+                    document.getElementById('gate-sub').textContent=t.plat+' parked '+t.durationMin+'min';
+                    document.getElementById('last-tx').style.display='block';
+                    document.getElementById('last-tx-plat').textContent=t.plat;
+                    document.getElementById('last-tx-dur').textContent=t.durationMin+' min';
+                    document.getElementById('last-tx-cost').textContent='$'+t.costUsd.toFixed(2);
+                    document.getElementById('last-tx-motes').textContent=t.motes+' motes';
+                    document.getElementById('last-tx-hash').textContent=t.hash;
+                }
+                const p=data.proposal;
+                document.getElementById('llm-rationale').textContent='"'+(p.rationale||'Strategy executed.')+'"';
+                document.getElementById('llm-action').textContent=p.action;
+                document.getElementById('llm-confidence').textContent=(p.confidence||0)+'%';
+                document.getElementById('llm-pair').textContent=p.pair;
+                if(p.x402Proof){
+                    document.getElementById('x402-icon').textContent='OK';
+                    document.getElementById('x402-label').textContent='x402 Verified - 0.001 CSPR paid';
+                }
+                if(data.execution){
+                    recentDecisions.unshift({action:p.action,pair:p.pair,outcome:data.execution.vaultResult?.outcome||'success',tx_hash:data.execution.vaultResult?.txHash||data.execution.txHash});
+                    if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);
+                    renderRecentDecisions();
+                }
+                document.getElementById('status-line').textContent='OK Cycle Complete';
+                await refreshState();
+            }catch(e){
+                document.getElementById('llm-rationale').textContent='"'+e.message+'"';
+                document.getElementById('status-line').textContent='ERR '+e.message;
+            }finally{
+                btn.disabled=false;
+            }
+        }
         function connectEventStream(){try{if(eventSource)eventSource.close();if(new URLSearchParams(window.location.search).get('noSSE')==='1')return;eventSource=new EventSource(API_BASE+'/api/events');eventSource.addEventListener('strategy',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open';if(d.rationale)document.getElementById('llm-rationale').textContent='"'+d.rationale+'"';recentDecisions.unshift(d);if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions();refreshState()}catch{}});eventSource.addEventListener('revenue',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Vehicle Exiting';document.getElementById('gate-sub').textContent='+'+d.amount+' motes from '+d.source;document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=d.source;document.getElementById('last-tx-motes').textContent=d.amount+' motes';document.getElementById('last-tx-hash').textContent=d.reference}catch{}});eventSource.onerror=()=>setNet('alert','SSE Disconnected')}catch(e){}}
         function initDashboard(){document.getElementById('btn-run').addEventListener('click',runAgentCycle);fetchHealth();refreshState();refreshFund();if(new URLSearchParams(window.location.search).get('noPoll')!=='1')setInterval(()=>{fetchHealth();refreshState();refreshFund()},5000);connectEventStream()}
 

@@ -156,6 +156,22 @@ app.get('/api/events', (req, res) => {
 app.get('/api/cycles', (_, res) => res.json(cycleHistory));
 
 /**
+ * v0.8.2: request-driven deposit simulator. Triggers ONE real on-chain
+ * deposit from a random stakeholder, returns the deploy hash + metadata.
+ * The dashboard calls this before /api/cycle so the agent sees a fresh
+ * deposit event in the same user click.
+ */
+app.post('/api/simulator/tick', async (_, res) => {
+  try {
+    const { triggerDeposit } = await import('./simulator/depositSimulator');
+    const result = await triggerDeposit();
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message ?? String(e) });
+  }
+});
+
+/**
  * v0.8.1+: fund custodian state from the redesigned AgentVault.
  * Returns AUM, total custodied, total realised yield, position count.
  * All values in motes; frontend converts to CSPR.
