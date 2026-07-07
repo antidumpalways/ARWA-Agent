@@ -97,8 +97,14 @@ export async function runAnalyst(input: AnalystInput): Promise<StrategyProposal>
   if (cfg.AGENT_VAULT_CONTRACT_HASH) {
     try {
       vaultOverview = await getVaultOverview();
-    } catch (e) {
-      console.warn('[analyst] vault overview fetch failed', e);
+    } catch (e: any) {
+      // Silenced: known CSPR.cloud 404 for Odra struct reads (AGENTS.md §7).
+      // The fallback zero values are correct for the demo; the dashboard
+      // shows AUM/Positions from the local fundState cache instead.
+      const code = e?.code ?? e?.response?.status;
+      if (code !== 404 && code !== 'ERR_BAD_REQUEST') {
+        console.warn('[analyst] vault overview fetch failed', code, e?.message?.slice(0, 80));
+      }
     }
   } else {
     console.log('[analyst] AGENT_VAULT_CONTRACT_HASH not set — vault state will be zero');
