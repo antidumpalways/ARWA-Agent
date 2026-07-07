@@ -125,7 +125,7 @@
                         </div>
 
                         <!-- Step 1: SENSE -->
-                        <div id="step-1" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                        <div id="step-1" class="step-transition flex items-center gap-6 relative z-10" style="opacity:0.4">
                             <div class="relative w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box">
                                 <div class="radar-ripple hidden" id="radar-ripple-el"></div>
                                 <i class="fa-solid fa-circle-dot text-lg"></i>
@@ -139,7 +139,7 @@
                         </div>
 
                         <!-- Step 2: PAY -->
-                        <div id="step-2" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                        <div id="step-2" class="step-transition flex items-center gap-6 relative z-10" style="opacity:0.4">
                             <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-[10px] font-mono font-bold text-slate-500 step-icon-box">x402</div>
                             <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">2</div>
                             <div class="flex-1 min-w-0">
@@ -150,7 +150,7 @@
                         </div>
 
                         <!-- Step 3: REASON -->
-                        <div id="step-3" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                        <div id="step-3" class="step-transition flex items-center gap-6 relative z-10" style="opacity:0.4">
                             <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-brain text-lg"></i></div>
                             <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">3</div>
                             <div class="flex-1 min-w-0">
@@ -164,7 +164,7 @@
                         </div>
 
                         <!-- Step 4: ACT -->
-                        <div id="step-4" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                        <div id="step-4" class="step-transition flex items-center gap-6 relative z-10" style="opacity:0.4">
                             <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-bolt text-lg"></i></div>
                             <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">4</div>
                             <div class="flex-1 min-w-0">
@@ -181,7 +181,7 @@
                         </div>
 
                         <!-- Step 5: PROVE -->
-                        <div id="step-5" class="step-transition flex items-center gap-6 relative z-10 opacity-40">
+                        <div id="step-5" class="step-transition flex items-center gap-6 relative z-10" style="opacity:0.4">
                             <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-center text-slate-500 step-icon-box"><i class="fa-solid fa-shield-halved text-lg"></i></div>
                             <div class="w-6 h-6 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 step-number-badge">5</div>
                             <div class="flex-1 min-w-0">
@@ -420,9 +420,34 @@
             const numBadge = node.querySelector('.step-number-badge');
             const headerTag = node.querySelector('.step-tag-header');
             if(!iconBox||!numBadge) return;
-            if(state==='pending'){node.classList.remove('opacity-100');node.classList.add('opacity-40');iconBox.classList.remove('glow-active-icon','border-[#DAD168]','text-[#DAD168]');numBadge.classList.remove('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');numBadge.classList.add('bg-slate-950','text-slate-400','border-slate-800');if(headerTag)headerTag.classList.replace('text-[#DAD168]','text-slate-400');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='0%'}
-            else if(state==='active'){node.classList.remove('opacity-40');node.classList.add('opacity-100');iconBox.classList.add('glow-active-icon');numBadge.classList.remove('bg-slate-950','text-slate-400','border-slate-800');numBadge.classList.add('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.remove('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%'}
-            else if(state==='done'){node.classList.remove('opacity-40');node.classList.add('opacity-100');iconBox.classList.remove('glow-active-icon');iconBox.classList.add('text-[#DAD168]','border-[#DAD168]/50');numBadge.classList.remove('bg-[#DAD168]','text-darkBg','glow-active-number');numBadge.classList.add('bg-slate-900','text-[#DAD168]','border-[#DAD168]/30');if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%'}
+            // Use inline style.opacity so the animation works regardless of
+            // whether Tailwind CDN's JIT generated `opacity-40`/`opacity-100`.
+            if(state==='pending'){
+                node.style.opacity='0.4';
+                iconBox.classList.remove('glow-active-icon','border-[#DAD168]','text-[#DAD168]');
+                numBadge.classList.remove('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');
+                numBadge.classList.add('bg-slate-950','text-slate-400','border-slate-800');
+                if(headerTag)headerTag.classList.replace('text-[#DAD168]','text-slate-400');
+                if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');
+                if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='0%';
+            } else if(state==='active'){
+                node.style.opacity='1';
+                iconBox.classList.add('glow-active-icon');
+                numBadge.classList.remove('bg-slate-950','text-slate-400','border-slate-800');
+                numBadge.classList.add('bg-[#DAD168]','text-darkBg','border-[#DAD168]','glow-active-number');
+                if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');
+                if(nodeId===1&&radarRippleEl)radarRippleEl.classList.remove('hidden');
+                if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%';
+            } else if(state==='done'){
+                node.style.opacity='1';
+                iconBox.classList.remove('glow-active-icon');
+                iconBox.classList.add('text-[#DAD168]','border-[#DAD168]/50');
+                numBadge.classList.remove('bg-[#DAD168]','text-darkBg','glow-active-number');
+                numBadge.classList.add('bg-slate-900','text-[#DAD168]','border-[#DAD168]/30');
+                if(headerTag)headerTag.classList.replace('text-slate-400','text-[#DAD168]');
+                if(nodeId===1&&radarRippleEl)radarRippleEl.classList.add('hidden');
+                if(nodeId===3&&reasonProgressBar)reasonProgressBar.style.width='87%';
+            }
         }
 
         function updateActIcons(activeIdx){for(let i=0;i<4;i++){const icon=document.getElementById(`act-icon-${i}`);if(!icon)continue;if(i===activeIdx){icon.classList.remove('text-slate-600');icon.classList.add('text-[#DAD168]','scale-110')}else{icon.classList.remove('text-[#DAD168]','scale-110');icon.classList.add('text-slate-600')}}}
