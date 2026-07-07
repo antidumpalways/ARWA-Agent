@@ -226,8 +226,13 @@ app.post('/api/cycle', async (req, res) => {
 
 // ---------- boot ----------
 
-attachLiveStreams();
+// SSE live-event stream is optional — disabled when the upstream
+// `stream.testnet.cspr.cloud` host is unavailable (it was decommissioned
+// in mid-2026; see AGENTS.md §4). All dashboard metrics still update
+// via 5s HTTP polling to /api/fund and /api/health.
+// attachLiveStreams();
 app.listen(PORT, () => {
   console.log(`[backend] http://localhost:${PORT}`);
   console.log(`[backend] endpoints: /api/health /api/state /api/events /api/cycle`);
+  console.log(`[backend] (SSE live-event stream disabled; using HTTP polling)`);
 });
