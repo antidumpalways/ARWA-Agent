@@ -133,6 +133,10 @@ export async function triggerDeposit(): Promise<DepositResult> {
     }
 
     const txHash = r.data.result?.transaction_hash?.Version1 ?? '';
+    try {
+      const { recordStakeholderDeposit } = await import('../agent/fundState');
+      recordStakeholderDeposit(amountMotes.toString());
+    } catch {}
     return {
       ok: true,
       txHash,
