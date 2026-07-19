@@ -183,7 +183,7 @@ export async function signAndSubmitTransactionV1(tx: TransactionV1): Promise<{ t
                  String(submitResult);
 
   // Wait for execution
-  const result = await client.getTransactionInfo(txHash.replace('hash-', ''), 60000);
-  
+  const result: any = await (client as any).getTransactionInfo?.(txHash.replace('hash-', ''), 60000);
+
   return { txHash, result };
 }

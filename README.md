@@ -1,4 +1,4 @@
-# ARWA — Casper Agentic Buildathon 2026 — v0.8.2
+# ARWA — Casper Agentic Buildathon 2026 — v0.8.3 (Final Round)
 
 > **Autonomous multi-agent RWA yield router.** Stakeholders (parking
 > operators, rental owners, royalty issuers) deposit CSPR on-chain,
@@ -7,11 +7,12 @@
 > through the **CSPR.trade DEX** + **Casper native auction** delegation,
 > and log every decision on-chain for verifiable reputation.
 >
-> **v0.8.2**: Real fund custodian flow — `StakeholderDeposit` + redesigned
-> `AgentVault` (fund manager) working end-to-end on Casper 2.0 testnet.
-> 6 strategy actions: `swap`, `stake`, `add_liquidity`, `remove_liquidity`,
-> `compound`, `hold`. Dashboard "Force Action" toggle. Multi-pair selector.
-> Risk circuit breaker with drawdown + revert-streak detection.
+> **v0.8.3 — Final Round submission**: Real fund custodian flow end-to-end
+> on Casper 2.0 testnet. 6 strategy actions: `swap`, `stake`, `add_liquidity`,
+> `remove_liquidity`, `compound`, `hold`. Dashboard "Force Action" toggle.
+> Multi-pair selector. Risk circuit breaker with drawdown + revert-streak
+> detection. **600 CSPR native stake verified on-chain (block 8430553)**
+> via the trigger-driven dashboard flow.
 
 [![Caspar 2.0 testnet](https://img.shields.io/badge/Caspar_2.0-testnet-FF6B6B?logo=casper&logoColor=white)](https://testnet.cspr.live)
 [![Odra 2.7](https://img.shields.io/badge/Odra-2.7-5B21B6?logo=rust&logoColor=white)](https://odra.dev)
@@ -86,7 +87,7 @@ event and runs a fully-autonomous decision loop on the depositor's funds
 
 ---
 
-## ✅ Verified end-to-end (v0.8.0+, 2026-06-24)
+## ✅ Verified end-to-end (v0.8.3+, 2026-07-08)
 
 The full decision loop runs **on real Casper 2.0 testnet** — every step below is
 a live transaction, not a simulation:
@@ -98,10 +99,14 @@ a live transaction, not a simulation:
 | Vault log (audit trail) | `5ee46d02…e746` | `204304a9…` | `emit_revenue` on package `hash-5ba7…a6` |
 | LP approval WCSPR | `47bf77c0…8704` | `953f1263…` | CEP-18 approval for liquidity add |
 | LP approval CSPRCAT | `e8e94e8d…3e13` | `953f1263…` | CEP-18 approval for liquidity add |
-| Native `stake` action | (code path ready, v0.8.2) | — | SDK `NativeDelegateBuilder` — 18,528 active testnet validators, fallback list in `casper/staking.ts` |
+| **Native `stake` action (v0.8.2+)** | `87e3b00e…0c281` | `8430553` | 600 CSPR delegated to validator `0100…d81`; `error_message: null`, `status: processed` |
+| **Stakeholder deposit (Mall XYZ)** | `11fb654d…def93` | — | "Mall XYZ Operator" / `parking`, 33.99 CSPR |
+| **Vault log v0.8.2 (600 CSPR stake)** | `bace50e6…84b4` | — | `record_strategy_execution` + `emit_revenue` after successful stake |
 
 **What works today**: revenue event ingestion → analyst → x402 paid signal →
-strategy decision → on-chain swap → on-chain audit log → SSE feed → frontend.
+strategy decision → on-chain swap / native stake / LP approval → on-chain audit
+log → SSE feed → frontend. The 600 CSPR stake tx was executed end-to-end via
+the dashboard "Trigger Deposit & Run Cycle" button on 2026-07-08.
 
 **What's infrastructure-blocked on testnet** (works on mainnet): `add_liquidity`
 Session tx is 107 KB JSON — exceeds Casper 2.0 testnet public RPC body limit

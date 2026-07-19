@@ -1,6 +1,6 @@
 {
   "name": "arwa",
-  "version": "0.8.0",
+  "version": "0.8.3",
   "description": "ARWA — Agentic Real-World Assets. Autonomous multi-agent RWA yield optimizer on Casper: Analyst + Executor with self-hosted CSPR.trade MCP, x402 micropayments, and on-chain AgentVault for verifiable reputation.",
   "main": "dist/index.js",
   "type": "commonjs",

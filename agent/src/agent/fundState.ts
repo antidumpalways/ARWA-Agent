@@ -30,6 +30,7 @@ export interface FundState {
 }
 
 const STATE_FILE = (() => {
+  if (process.env.ARWA_FUND_STATE_FILE) return process.env.ARWA_FUND_STATE_FILE;
   const thisDir = __dirname;
   for (const candidate of [
     join(thisDir, '..', '..', '..', '.arwa-fund-state.json'),

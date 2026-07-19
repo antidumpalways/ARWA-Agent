@@ -122,15 +122,13 @@ export async function runExecutor(
     // v0.8.1+: record this position in the redesigned AgentVault
     // (fund custodian). Non-critical — if it fails, we still log
     // success in the audit log below.
-    if (success && proposal.action !== 'hold') {
+    if (success) {
       try {
-        const kind = proposal.action === 'stake' ? 'validator_delegate'
-          : proposal.action === 'add_liquidity' ? 'lp'
+        const kind = proposal.action === 'add_liquidity' ? 'lp'
           : proposal.action === 'swap' ? 'sCSPR_swap'
-          : 'other';
-        const target = proposal.action === 'stake' && proposal.validatorPubKey
-          ? proposal.validatorPubKey
-          : proposal.pair;
+          : proposal.action === 'remove_liquidity' ? 'lp_remove'
+          : 'compound';
+        const target = proposal.pair ?? '';
         const posTx = await recordStrategyExecution(
           kind, target, proposal.amountIn, deployHash
         );

@@ -85,7 +85,8 @@ export interface StakeholderDepositConsumer {
 export function startStakeholderDepositConsumer(): StakeholderDepositConsumer {
   const cfg = loadConfig();
   const depositHash = cfg.STAKEHOLDER_DEPOSIT_CONTRACT_HASH;
-  if (!depositHash || !cfg.CSPR_CLOUD_API_KEY) {
+  const apiKey = cfg.CSPR_CLOUD_API_KEY;
+  if (!depositHash || !apiKey) {
     console.warn('[deposit-consumer] STAKEHOLDER_DEPOSIT_CONTRACT_HASH or CSPR_CLOUD_API_KEY missing — consumer disabled');
     return { start: () => {}, stop: () => {} };
   }
@@ -97,7 +98,7 @@ export function startStakeholderDepositConsumer(): StakeholderDepositConsumer {
   async function poll() {
     if (stopped) return;
     try {
-      const events = await fetchRecentDeposits(depositHash, cfg.CSPR_CLOUD_API_KEY!);
+      const events = await fetchRecentDeposits(depositHash!, apiKey!);
       for (const e of events) {
         if (e.id > lastSeenId) {
           if (lastSeenId > 0) {

@@ -8,6 +8,7 @@ import { loadConfig } from '../config';
 import { AgentVaultLog, ExecutionResult } from '../types';
 import {
   signAndSubmitDeploy,
+  buildContractCallDeploy,
 } from './signer';
 import {
   PublicKey,
@@ -117,7 +118,7 @@ export async function logStrategyToVault(
     return { txHash, outcome: 'success' };
   } catch (fallbackErr: any) {
     console.error('[vault] emit_revenue failed:', fallbackErr?.message?.slice(0, 200));
-    return { txHash: 'failed', outcome: 'failed' };
+    return { txHash: 'failed', outcome: 'reverted' };
   }
 }
 

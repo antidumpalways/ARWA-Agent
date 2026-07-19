@@ -334,14 +334,14 @@ export async function signAndSubmitSwap(
     throw new Error(`RPC error: ${response.data.error.message}`);
   }
   
-  const resultHash = response.data.result?.transaction_hash?.Version1 || 
+  const resultHash = response.data.result?.transaction_hash?.Version1 ||
                      response.data.result?.transaction_hash || '';
-  
+
   // Wait for execution
   try {
-    const result = await getCasperClient().waitForTransaction(resultHash, 60000);
+    const result: any = await getCasperClient().waitForTransaction(resultHash, 60000);
     const success = !!(
-      result?.execution_results?.[0]?.result?.Success ?? 
+      result?.execution_results?.[0]?.result?.Success ??
       result?.executionResults?.[0]?.result?.Success
     );
     return { deployHash: resultHash, success };
@@ -379,7 +379,7 @@ export async function signAndSubmitTransactionV1(
   }
 
   // Wait for execution
-  const result = await client.waitForTransaction(txHash, 60_000);
+  const result: any = await client.waitForTransaction(txHash as any, 60_000);
   return { deployHash: txHash, result };
 }
 
