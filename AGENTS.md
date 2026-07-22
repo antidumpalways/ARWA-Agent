@@ -8,11 +8,11 @@
 ## 1. Project Identity
 
 - **Official name**: ARWA (Agentic Real-World Assets)
-- **Rebrand from**: ParkFlow (all source rebranded, repo URL retained for continuity)
+- **Rebrand from**: ParkFlow (all source rebranded; repo moved to ARWA-Agent)
 - **Purpose**: Autonomous multi-agent RWA yield optimizer on Casper 2.0 testnet
 - **Buildathon**: Casper Agentic Buildathon 2026 (deadline: **30 Juni 2026**)
 - **Submission platform**: DoraHacks
-- **Repo**: https://github.com/antidumpalways/ParkFlow-Agent
+- **Repo**: https://github.com/antidumpalways/ARWA-Agent
 
 ### Tech Stack
 - **Runtime**: Node.js v26
@@ -249,13 +249,13 @@ The add_liquidity tx itself is **infrastructure-blocked on testnet** (size limit
 cd casper-x402 && npm run mcp
 
 # Terminal 2: x402 signal
-cd ParkFlow-Agent/agent && npm run x402-server
+cd ARWA-Agent/agent && npm run x402-server
 
 # Terminal 3: Backend agent
-cd ParkFlow-Agent/agent && npm run cycle
+cd ARWA-Agent/agent && npm run cycle
 
 # Terminal 4: Frontend
-cd ParkFlow-Agent/frontend && npx serve .
+cd ARWA-Agent/frontend && npx serve .
 ```
 
 ### Demo Commands

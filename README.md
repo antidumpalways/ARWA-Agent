@@ -41,8 +41,9 @@
 15. [User actions required](#-user-actions-required)
 16. [Empirical data & projected returns](#-empirical-data--projected-returns)
 17. [Submission readiness](#-submission-readiness-casper-agentic-buildathon-2026)
-18. [Future roadmap](#-future-roadmap-post-buildathon)
-19. [Resources](#-resources)
+18. [Long-term launch plan](#-long-term-launch-plan)
+19. [Future roadmap](#-future-roadmap-post-buildathon)
+20. [Resources](#-resources)
 
 ---
 
@@ -381,8 +382,8 @@ ARWA-agent/
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/antidumpalways/ParkFlow-Agent ARWA-agent
-cd ARWA-agent/agent
+git clone https://github.com/antidumpalways/ARWA-Agent.git
+cd ARWA-Agent/agent
 cp .env.example .env
 # edit .env → set CSPR_CLOUD_API_KEY
 npm install
@@ -977,10 +978,11 @@ gas cost ~3 CSPR per cycle absorbed.
 
 ---
 
-## 🏆 Submission readiness (Casper Agentic Buildathon 2026)
+## 🏆 Submission readiness (Casper Agentic Buildathon 2026 — Final Round)
 
-> **Deadline**: 30 Juni 2026
-> **Platform**: [DoraHacks → Casper Agentic Buildathon 2026](https://dorahacks.io/hackathon/2202/detail)
+> **Final Round deadline**: 26 Juli 2026, 23:59
+> **Final Round page**: [DoraHacks → Casper Agentic Buildathon 2026 Finals](https://dorahacks.io/hackathon/casper-agentic-buildathon-finals)
+> **Qualification round**: qualified via Builder Merit Path (working prototype + on-chain component)
 
 ### What judges will see
 
@@ -990,24 +992,30 @@ gas cost ~3 CSPR per cycle absorbed.
 | **6 strategy actions** | `swap` / `stake` / `add_liquidity` / `remove_liquidity` / `compound` / `hold` — including **native Casper 2.0 delegation** via SDK `NativeDelegateBuilder` (no DEX, ~7-9% APY). Dashboard "Force Action" toggle demos any on demand. |
 | **Multi-pair strategy** | `agent/src/agent/pairSelector.ts` ranks all CSPR pairs by impact + yield + `analyze_trade` recommendation, falls back to sCSPR. |
 | **Risk management** | `agent/src/agent/riskGuard.ts` — circuit breaker on 10% drawdown (env: `ARWA_MAX_DRAWDOWN_PCT`) or 3 reverted txs in a row (env: `ARWA_MAX_REVERT_STREAK`), with cooldown. |
-| **Real on-chain execution** | Verified testnet txs in [Live deploy hashes](#-live-deploy-hashes-casper-20-testnet) — swap, vault log, CEP-18 approvals, all atomic. |
+| **Real on-chain execution** | Verified testnet txs in [Live deploy hashes](#-live-deploy-hashes-casper-20-testnet) — 600 CSPR native stake block `8550584` (status=processed, error=null), stakeholder deposit `18db96a4…`, vault log `9ddb179d…`, all atomic. |
 | **Empirical evidence** | [Empirical data & projected returns](#-empirical-data--projected-returns) — measured infrastructure limits, DEX landscape, projected 30-day returns with honest gaps. |
 | **x402 micropayments** | Real EIP-712 signed via `@noble/curves` SECP256K1; server at `npm run x402-server`. |
 | **MCP integration** | Self-hosted CSPR.trade MCP on `:3001` with body-parser + pubkey regex patches documented in `AGENTS.md §4`. |
-| **Multi-agent design** | `AgentVault` source has `register_agent()` / `unregister_agent()` / `is_agent()`. Deployed package `hash-5ba7…a6` is reused as the on-chain audit log. |
+| **Multi-agent design** | `AgentVault` source has `register_agent()` / `unregister_agent()` / `is_agent()`. Deployed package `hash-ab46…7b67` (v2) is the on-chain fund custodian. |
 | **Generic RWA primitive** | [Business narrative](#-business-narrative-solving-real-world-rwa-liquidity) shows the same contract shape works for parking, rentals, royalties, carbon credits, solar. |
 | **Post-hackathon roadmap** | [Future roadmap](#-future-roadmap-post-buildathon) — v0.9 chain-agnostic RWA, v1.0 mainnet, v1.1+ bridges (conditional). Shows this is a platform, not a one-off. |
 | **Production readiness** | [Architecture Scalability section](#-architecture-scalability--production-readiness) maps every component to a real status (✅ real, 🟡 code-path real, demo runs heuristic). |
+| **Test coverage** | 30/30 jest pass (incl. fundState cache, slippage math, x402 EIP-712, runcycle, LLM strategy, streaming). `npm test` runs in ~6s. |
+| **Type safety** | `npm run typecheck` clean on `src/` (0 errors). `scripts/` left unchecked (exploratory one-offs, documented in AGENTS.md). |
+| **Code-of-Conduct alignment** | Original code, no plagiarism. Apache 2.0 license. `LICENSE` file present. All on-chain ops are real (no mocks for primary flows). |
 
 ### Submission checklist (for the team)
 
-- [x] Repo on GitHub: <https://github.com/antidumpalways/ParkFlow-Agent>
+- [x] Repo on GitHub: <https://github.com/antidumpalways/ARWA-Agent>
+- [x] `LICENSE` (Apache 2.0)
 - [x] `AGENTS.md` with full project context for judges / future maintainers
-- [x] README v0.8.2 with verified end-to-end txs, 6 strategy actions (incl. native `stake`), empirical data, multi-pair + circuit breaker + dashboard force-toggle, post-buildathon roadmap
-- [x] `npm run setup` one-command deploy
-- [x] Frontend with animated pipeline + embedded dashboard (`frontend/index.html`)
+- [x] README v0.8.3 with verified end-to-end txs (incl. 600 CSPR native stake block 8550584), 6 strategy actions (incl. native `stake`), empirical data, multi-pair + circuit breaker + dashboard force-toggle, post-buildathon roadmap
+- [x] 3 deployed smart contracts on Casper 2.0 testnet (StakeholderDeposit, AgentVault v2, RevenueEmitter)
+- [x] Working prototype with 4-service stack (MCP, x402, backend, frontend) on `npm run dev`
+- [x] 30/30 jest pass, `npm run typecheck` clean
+- [x] Frontend with animated pipeline + embedded dashboard (`frontend/index.html`) + OG metadata
+- [x] Re-submitted on Final Round DoraHacks page (link above)
 - [ ] 5-minute demo video (suggested script below)
-- [ ] Final submission on DoraHacks
 
 ### Suggested demo video script (~5 min)
 
@@ -1022,6 +1030,91 @@ gas cost ~3 CSPR per cycle absorbed.
 9. **4:15** — Switch to `add_liquidity`, click Run → demo approval + LP path.
 10. **4:30** — Walk through the "Generic RWA primitive" + "6 strategy actions" tables.
 11. **5:00** — Out: link to repo + AGENTS.md + DoraHacks submission.
+
+---
+
+## 🚀 Long-term launch plan
+
+> Concrete plan for getting ARWA from "buildathon demo" to "production
+> multi-agent RWA platform". Updated v0.8.3.
+
+### North star (12-18 month vision)
+
+**ARWA = the trust layer for agentic finance on Casper.** Every
+real-world revenue stream (parking, rentals, royalties, carbon credits,
+solar) should be able to earn yield autonomously — 24/7, no human in
+the loop, every decision signed on-chain.
+
+### Phased milestones
+
+| Phase | When | Theme | Headline feature |
+|-------|------|-------|------------------|
+| **v0.9** | Q3 2026 | Post-buildathon hardening | Era reward auto-claim, real SSE restore, multi-key stakeholder wallets |
+| **v0.9+** | Q3 2026 | First RWA partner | Parking operator pilot (Indonesia) — 1 paying stakeholder running real CSPR through ARWA |
+| **v1.0** | Q4 2026 | Mainnet candidate | Casper mainnet migration + Redis fund state + LLM audit trail |
+| **v1.1** | Q1 2027 | Multi-agent | Specialist split: Risk Agent + Treasury Agent + Legal Agent deliberate on every cycle |
+| **v1.2+** | Q2 2027+ | Chain-agnostic | Optional CSPR ↔ ETH/Solana bridge (only when an RWA partner requires it) |
+
+### Funding & sustainability
+
+- **Phase 1 (Q3 2026)**: self-funded + **Casper Association ecosystem
+  grant** (apply immediately after final round; the buildathon is the
+  qualifying signal).
+- **Phase 2 (Q4 2026, post-mainnet)**: 0.5% management fee on AUM
+  (industry standard for RWA yield routers; charged via the existing
+  `deposit_for_strategy` entry point).
+- **Phase 3 (2027+)**: B2B SaaS — parking operators, rental platforms,
+  royalty DAOs pay a monthly fee to use the hosted ARWA agent instead
+  of running their own infrastructure.
+- **Open-source core forever** (Apache 2.0). Fees only on the
+  hosted/managed version; the on-chain contracts stay free and
+  auditable.
+
+### Distribution — where users come from
+
+- **Indonesia (home market, Q3-Q4 2026)**: 1,500+ mall parking
+  operators + 200+ music royalty management companies. Outreach via
+  Indodax, Casper Indonesia, Stellar Indonesia communities.
+- **SEA expansion (Q1-Q2 2027)**: Philippines (GCash partnership
+  pipeline), Vietnam, Thailand.
+- **Global (2027+)**: carbon credit registries, solar farm operators,
+  long-tail RWA issuers who don't have treasury teams.
+
+### Ecosystem presence (socials & community)
+
+- **X / Twitter**: [@arwa_agent](https://x.com/arwa_agent) — release
+  announcements, RWA partner wins, agent decision telemetry.
+- **GitHub Discussions**: open Q3 2026 for feature requests + partner
+  Q&A.
+- **Casper Discord** + **Casper Telegram**: weekly updates + Q&A
+  (ARWA maintainer handles these directly).
+- **Quarterly ARWA Transparency Report** — published on-chain + on
+  the dashboard: total AUM, total yield paid, total strategy
+  decisions, agent accuracy score, circuit-breaker trips.
+
+### Code-of-Conduct alignment
+
+- Apache 2.0 — no vendor lock-in, full source available.
+- Every agent decision is **signed and on-chain** — no black box.
+- Risk circuit breaker shipped in v0.8.3 from day 1 (not a post-hoc
+  patch after a hack).
+- Every new contract upgrade goes through Casper 2.0 testnet for ≥30
+  days before mainnet.
+- Honest gaps documented in [Verified end-to-end](#-verified-end-to-end-v083-2026-07-08)
+  and [What works today](#-verified-end-to-end-v083-2026-07-08) —
+  no inflated claims.
+
+### Success criteria (12 months post-buildathon)
+
+| Metric | Target |
+|--------|--------|
+| Total AUM on mainnet | 100,000+ CSPR |
+| Real-world RWA partners (signed) | 3+ |
+| Multi-agent specialists live | 3 (Risk / Treasury / Legal) |
+| Casper ecosystem grant | 1 secured |
+| Public dashboard uptime | 99.9% |
+| On-chain audit-log entries | 10,000+ |
+| Community size (X + Discord combined) | 5,000+ followers |
 
 ---
 
