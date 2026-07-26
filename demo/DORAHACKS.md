@@ -102,12 +102,15 @@ Links
 GitHub: https://github.com/antidumpalways/ARWA-Agent
 Demo video: https://youtu.be/4X8O37tQRWo
 Testnet: https://testnet.cspr.live
-StakeholderDeposit: hash-c0ae4b5d slash 0f2a
-AgentVault v2: hash-ab4608ba slash 7b67
-RevenueEmitter: hash-5ba747df slash 09a6
-Stake tx 600 CSPR: 74a4803f slash c526 (block 8,550,584)
-Vault log: e0ee7919 slash 1188 (success)
-License: Apache 2.0
+StakeholderDeposit: https://testnet.cspr.live/contract-package/c0ae4b5dcef3a6aa26154ae3c62aa5768691877d97d81e7ce794046ed7d20f2a
+AgentVault v2: https://testnet.cspr.live/contract-package/ab4608ba784fb8c90928b95a5e8b7b54d12c7e94557ae8e28e3f86e2da3b7b67
+RevenueEmitter: https://testnet.cspr.live/contract-package/5ba747dfbf3a6769a79db63198c1c414b85bae1b407777cbc56d53c208ec09a6
+Stake tx 600 CSPR: https://testnet.cspr.live/deploy/74a4803ffc9745bfd733dbf43c0988fe559ba6b79dcb09338e0b6d71221c5c26 (block 8,550,584)
+Vault log: https://testnet.cspr.live/deploy/e0ee79198701bb8169fe29feae65318be3be02e959ced13f6d71882f04ef1188 (success)
+Stakeholder deposit: https://testnet.cspr.live/deploy/413ed9fee367de60e1303871b66b02d4db58d036e5614cb939e47e80118632f4
+Earlier swap 1 CSPR to sCSPR: https://testnet.cspr.live/deploy/c44b777e55cf260700e8b00869683bb8d3e57f7c6c7f217edbc414e2ecf22b6f
+Earlier LP approval WCSPR: https://testnet.cspr.live/deploy/47bf77c0de00117d19ea5a876cc72ad4a609562a3223c052a243db38ff818704
+License: https://github.com/antidumpalways/ARWA-Agent/blob/main/LICENSE (Apache 2.0)
 Solo builder: antidumpalways, Indonesia
 
 ---
