@@ -293,6 +293,45 @@
           </div>
           <button id="btn-run" class="bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold py-2.5 px-5 rounded-lg disabled:opacity-50" disabled>▶ Trigger Deposit &amp; Run Cycle</button>
         </div>
+
+        <!-- v0.8.3: deployment banner. Shown when backend is offline, hidden on connect. -->
+        <div id="deploy-banner" class="hidden">
+          <div class="rounded-xl border-2 border-arwaRed/40 bg-arwaRed/5 p-5 space-y-3">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl flex-shrink-0">⚠️</div>
+              <div class="flex-1 space-y-2">
+                <div class="font-bold text-white text-base">Frontend is live, full agent stack is local-only</div>
+                <div class="text-sm text-slate-300 leading-relaxed">
+                  The 4-service stack (Backend :4000, MCP :3001, x402 :4001, Frontend :3000) is intentionally not deployed to the cloud for this buildathon submission. The agent private key and CSPR.cloud facilitator access stay on the builder's machine, and every on-chain action is reproducible locally via <code class="px-1.5 py-0.5 rounded bg-slate-900 text-arwaRed font-mono text-xs">start-4-windows.ps1</code>.
+                </div>
+                <div class="text-sm text-slate-300">
+                  <span class="font-bold text-tacha">For the full end-to-end experience</span> use the sources below. They cover exactly the same flow the dashboard runs.
+                </div>
+                <div class="grid sm:grid-cols-3 gap-2 pt-1">
+                  <a href="https://youtu.be/4X8O37tQRWo" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-arwaRed hover:bg-arwaRed/90 text-white text-xs font-bold transition-all">
+                    ▶ 5-min demo video
+                  </a>
+                  <a href="https://testnet.cspr.live/deploy/74a4803ffc9745bfd733dbf43c0988fe559ba6b79dcb09338e0b6d71221c5c26" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 transition-all">
+                    🔗 600 CSPR stake on-chain
+                  </a>
+                  <a href="https://github.com/antidumpalways/ARWA-Agent" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 transition-all">
+                    ⌥ GitHub repo + local run
+                  </a>
+                </div>
+                <details class="pt-1">
+                  <summary class="text-xs text-slate-400 hover:text-white cursor-pointer select-none">Why not deployed? (click to expand)</summary>
+                  <div class="text-xs text-slate-400 leading-relaxed pt-2 space-y-1">
+                    <div>1. Agent SECP256K1 private key + CSPR.cloud facilitator access would have to live in cloud env vars. For a buildathon submission with real testnet value, that exposure is not worth the convenience.</div>
+                    <div>2. The CSPR.trade MCP requires post-install patches (body-parser limit + SECP256K1 pubkey regex) that are documented in AGENTS.md section 4 but need re-apply on every cloud deploy.</div>
+                    <div>3. The 600 CSPR native stake at block 8,550,584 (status processed, error null) and the 4 other verified txs at <code class="px-1 py-0.5 rounded bg-slate-900 font-mono text-[10px]">testnet.cspr.live</code> are the real proof, not a hosted demo URL.</div>
+                    <div>4. The demo video is 5 minutes of live screen recording from the same machine running this UI, with cursor on every click and every on-chain confirmation visible.</div>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="flex flex-wrap gap-4 text-sm items-center">
           <div><span class="text-xs text-slate-500 uppercase">Source</span><input id="in-source" class="ml-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm w-40" value="P1 - Main Gate"></div>
           <div><span class="text-xs text-slate-500 uppercase">USD/Cycle</span><input id="in-amount-usd" class="ml-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm w-24" type="number" value="20" step="1"></div>
@@ -476,14 +515,39 @@
         else{updateNodeStyle(1,'done');updateNodeStyle(2,'done');updateNodeStyle(3,'done');updateNodeStyle(4,'done');updateNodeStyle(5,'done');const remainingSeconds=Math.ceil(7.2-elapsedSeconds);if(nextCycleCountdown)nextCycleCountdown.textContent=`Next cycle in 0${remainingSeconds}s`}}
 
         // ====== DASHBOARD JS ======
-        const API_BASE = 'http://localhost:4000', EXPLORER = 'https://testnet.cspr.live';
+        // v0.8.3: when the page is hosted on a different host (Vercel, GitHub Pages,
+        // local file://) and the backend is on localhost:4000, CORS will block.
+        // For static hosting we want the banner to show instead of a confusing
+        // network error. We detect this in fetchHealth() and reveal the banner.
+        const API_BASE = (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('api')) return params.get('api');
+            // Same-origin (e.g. local :3000 serving both) -> relative path
+            if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                // If we're on a non-localhost host, assume backend not deployed;
+                // we still return the localhost default so the banner can show
+                // a clear message instead of a CORS-masked error.
+                return 'http://localhost:4000';
+            }
+            return 'http://localhost:4000';
+        })();
+        const EXPLORER = 'https://testnet.cspr.live';
         let connectedPubkey=null, eventSource=null, recentDecisions=[];
 
         function setNet(s,t){const p=document.getElementById('net-text');const d=document.getElementById('net-dot');if(s==='live'){d.style.background='#16a34a';d.style.animation='radar-pulse 2s infinite'}else{d.style.background='#ef4444';d.style.animation='none'}p.textContent=t}
+
+        function showDeployBanner(){
+            const b=document.getElementById('deploy-banner');
+            if(b) b.classList.remove('hidden');
+        }
+        function hideDeployBanner(){
+            const b=document.getElementById('deploy-banner');
+            if(b) b.classList.add('hidden');
+        }
         function shortenHash(h,a=10,b=6){return h?h.slice(0,a)+'…'+h.slice(-b):'—'}
         function renderRecentDecisions(){const e=document.getElementById('recent-tx');if(recentDecisions.length===0){e.innerHTML='<div class="p-2">No decisions yet</div>';return}e.innerHTML='';for(const d of recentDecisions){const o=d.outcome==='success'?'text-emerald-400':'text-red-400';e.innerHTML+=`<div class="flex justify-between py-1 border-b border-slate-800/50"><div><span class="text-white font-medium">${d.action}</span> <span class="text-slate-500">${d.pair}</span></div><div class="text-right"><span class="${o} text-[10px]">${d.outcome}</span><br><a class="text-[10px] text-slate-600 font-mono" href="${EXPLORER}/deploy/${d.tx_hash}" target="_blank">${shortenHash(d.tx_hash)}</a></div></div>`}}
 
-        async function fetchHealth(){try{const h=await fetch(API_BASE+'/api/health').then(r=>r.json());if(h.ok){setNet('live','Live on '+h.network);document.getElementById('btn-run').disabled=false;document.getElementById('status-line').textContent='Connected — Ready'}if(h.contracts){document.getElementById('link-rev')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.revenue_emitter);document.getElementById('link-vault')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.agent_vault);if(h.contracts.arwa_agent_vault){document.getElementById('fund-vault-hash').textContent=h.contracts.arwa_agent_vault;document.getElementById('fund-vault-hash').onclick=()=>window.open(EXPLORER+'/contract/'+h.contracts.arwa_agent_vault,'_blank');document.getElementById('fund-vault-hash').style.cursor='pointer'}}}catch(e){setNet('alert','Backend offline')}}
+        async function fetchHealth(){try{const h=await fetch(API_BASE+'/api/health').then(r=>r.json());if(h.ok){setNet('live','Live on '+h.network);document.getElementById('btn-run').disabled=false;document.getElementById('status-line').textContent='Connected — Ready';hideDeployBanner()}if(h.contracts){document.getElementById('link-rev')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.revenue_emitter);document.getElementById('link-vault')?.setAttribute('href',EXPLORER+'/contract/'+h.contracts.agent_vault);if(h.contracts.arwa_agent_vault){document.getElementById('fund-vault-hash').textContent=h.contracts.arwa_agent_vault;document.getElementById('fund-vault-hash').onclick=()=>window.open(EXPLORER+'/contract/'+h.contracts.arwa_agent_vault,'_blank');document.getElementById('fund-vault-hash').style.cursor='pointer'}}}catch(e){setNet('alert','Backend offline — see banner below');showDeployBanner()}}
         async function refreshState(){try{const s=await fetch(API_BASE+'/api/state').then(r=>r.json());document.getElementById('kpi-strategies').textContent=s.totalStrategies??0;document.getElementById('kpi-reputation').textContent=s.reputation??0}catch(e){}}
         async function refreshFund(){try{const f=await fetch(API_BASE+'/api/fund').then(r=>r.json());if(f&&f.ok){document.getElementById('fund-aum').textContent=Number(f.custodiedCsprFormatted||0).toFixed(4);document.getElementById('fund-yield').textContent=Number(f.totalYieldFormatted||0).toFixed(4);document.getElementById('fund-positions').textContent=f.positionCount??0;document.getElementById('fund-sh-active').textContent=Number(f.stakeholderActiveFormatted||0).toFixed(4);document.getElementById('fund-sh-count').textContent=f.stakeholderDepositCount??0}}catch(e){}}
         async function runAgentCycle(){
@@ -556,7 +620,22 @@
         function connectEventStream(){try{if(eventSource)eventSource.close();if(new URLSearchParams(window.location.search).get('noSSE')==='1')return;eventSource=new EventSource(API_BASE+'/api/events');eventSource.addEventListener('strategy',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Gate Open';if(d.rationale)document.getElementById('llm-rationale').textContent='"'+d.rationale+'"';recentDecisions.unshift(d);if(recentDecisions.length>10)recentDecisions=recentDecisions.slice(0,10);renderRecentDecisions();refreshState()}catch{}});eventSource.addEventListener('revenue',(ev)=>{try{const d=JSON.parse(ev.data);document.getElementById('gate-icon').classList.add('bg-arwaRed');document.getElementById('gate-state').textContent='Vehicle Exiting';document.getElementById('gate-sub').textContent='+'+d.amount+' motes from '+d.source;document.getElementById('last-tx').style.display='block';document.getElementById('last-tx-plat').textContent=d.source;document.getElementById('last-tx-motes').textContent=d.amount+' motes';document.getElementById('last-tx-hash').textContent=d.reference}catch{}});eventSource.onerror=()=>setNet('alert','SSE Disconnected')}catch(e){}}
         function initDashboard(){document.getElementById('btn-run').addEventListener('click',runAgentCycle);fetchHealth();refreshState();refreshFund();if(new URLSearchParams(window.location.search).get('noPoll')!=='1')setInterval(()=>{fetchHealth();refreshState();refreshFund()},5000);connectEventStream()}
 
-        window.onload = () => { initElements(); startTime = Date.now(); setInterval(tick, 30); if (new URLSearchParams(window.location.search).get('dashboard') === '1') { document.getElementById('dashboard').style.display='block'; document.getElementById('landing-page').style.display='none'; initDashboard(); } };
+        window.onload = () => {
+            initElements();
+            startTime = Date.now();
+            setInterval(tick, 30);
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('dashboard') === '1') {
+                document.getElementById('dashboard').style.display='block';
+                document.getElementById('landing-page').style.display='none';
+                // If hosted externally (Vercel, GitHub Pages) the backend
+                // is not reachable, so show the banner immediately instead
+                // of waiting for fetchHealth to time out.
+                const isLocal = ['localhost','127.0.0.1',''].includes(window.location.hostname);
+                if (!isLocal) showDeployBanner();
+                initDashboard();
+            }
+        };
     </script>
 </body>
 </html>
