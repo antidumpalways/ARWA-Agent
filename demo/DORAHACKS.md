@@ -115,6 +115,24 @@ Solo builder: antidumpalways, Indonesia
 
 ---
 
+## Quick summary
+
+ARWA is the first autonomous multi-agent RWA yield router on Casper 2.0 that wires three flagship Casper primitives, namely MCP, x402, and native auction, into a single decision loop where every step is signed and on-chain. Real-world stakeholders deposit CSPR, the agent pays a 0.001 CSPR micropayment per cycle for a premium utilization forecast, picks one of six yield strategies with a confidence score, signs and submits the resulting transaction, and writes the decision back to chain via AgentVault v2. Three contracts are deployed on testnet, six strategy actions are wired, five real on-chain transactions are verifiable on cspr.live, and 30 of 30 jest tests pass with zero TypeScript errors on src. Apache 2.0.
+
+## Playbook (how a reviewer runs ARWA end-to-end in under 10 minutes)
+
+Step 1, open the demo video (5 minutes, watch once): https://youtu.be/4X8O37tQRWo
+
+Step 2, verify the on-chain proof. Open the 600 CSPR native stake at block 8,550,584, status processed, error message null: https://testnet.cspr.live/deploy/74a4803ffc9745bfd733dbf43c0988fe559ba6b79dcb09338e0b6d71221c5c26. The agent opened the cascade, paid the x402 forecast, picked stake as the action, signed with the local SECP256K1 PEM, submitted via account_put_transaction, and wrote the audit log back. Every link in that chain is on the testnet today.
+
+Step 3, browse the GitHub repo: https://github.com/antidumpalways/ARWA-Agent. README v0.8.3 has the full architecture, deploy hashes, and honest gaps. AGENTS.md has the full project context for future maintainers. The 30 of 30 jest suite runs in 6 seconds via npm test, and the typechecker is clean via npm run typecheck.
+
+Step 4, run it locally (optional, 10 minutes). The repo includes start-4-windows.ps1 for Windows or start-services.ps1 for cross-platform. Required: Node.js 26, a CSPR.cloud API key (free at testnet.cspr.cloud), and a Casper testnet wallet with at least 605 CSPR (top up at testnet.cspr.live slash tools slash faucet). Detailed setup is in SETUP_WINDOWS.md and the README Quick Start section. After start, the dashboard at localhost:3000 slash dashboard equals 1 lets a reviewer trigger a real on-chain deposit plus a full cycle with one click. The risk circuit breaker state is visible at agent slash arwa-risk.json. The local fund state is at agent slash arwa-fund-state.json.
+
+Step 5, if anything looks off, open a GitHub issue or DM the builder on the Casper Developers Telegram (https://t.me/CSPRDevelopers). The builder monitors both channels daily through 26 July 2026.
+
+---
+
 ## Placement reference (untuk upload ke DoraHacks form)
 
 | Image | File | Form field |
