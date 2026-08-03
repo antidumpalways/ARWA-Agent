@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ribbonRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F1F"/>
+      <stop offset="50%" stop-color="#E12E30"/>
+      <stop offset="100%" stop-color="#A11820"/>
+    </linearGradient>
+    <linearGradient id="ribbonRed2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF1F1F"/>
+      <stop offset="50%" stop-color="#E12E30"/>
+      <stop offset="100%" stop-color="#A11820"/>
+    </linearGradient>
+    <linearGradient id="ribbonRed3" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#E12E30"/>
+      <stop offset="100%" stop-color="#FF5555"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#05070F"/>
+  <!-- Left ribbon: top-left to bottom-center, with curved fold -->
+  <path d="M 512 100
+           C 480 200, 380 380, 260 600
+           C 220 680, 200 780, 230 880
+           L 380 880
+           C 410 800, 460 660, 500 540
+           L 500 540
+           Z" fill="url(#ribbonRed)"/>
+  <!-- Right ribbon: top-right to bottom-center, mirror -->
+  <path d="M 512 100
+           C 544 200, 644 380, 764 600
+           C 804 680, 824 780, 794 880
+           L 644 880
+           C 614 800, 564 660, 524 540
+           L 524 540
+           Z" fill="url(#ribbonRed2)"/>
+  <!-- Bottom ribbon: connects left and right at the base -->
+  <path d="M 230 880
+           C 350 870, 674 870, 794 880
+           C 800 880, 800 720, 750 720
+           L 274 720
+           C 224 720, 224 880, 230 880
+           Z" fill="url(#ribbonRed3)"/>
+</svg>
